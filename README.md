@@ -24,7 +24,7 @@ pip install carrus
 
 ## Quick Start
 
-1. Create a recipe (firefox.yaml):
+1. Create a manifest (firefox.yaml):
 ```yaml
 name: Firefox
 version: "123.0"
@@ -48,6 +48,8 @@ carrus download firefox.yaml
 ```bash
 carrus build-mdm firefox.yaml
 ```
+
+## All the items below are a work in progress and don't yet exist. You've been warned.
 
 ## Documentation
 
