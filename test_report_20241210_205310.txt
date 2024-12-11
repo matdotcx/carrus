@@ -1,0 +1,26 @@
+Carrus Test Report - 2024-12-10 20:53:10.033829
+--------------------------------------------------
+
+Tests passed: 5
+Tests failed: 1
+Total tests: 6
+
+Test: Help Command
+Result: passed
+------------------------------
+Test: Download Command
+Result: passed
+------------------------------
+Test: Verify Command
+Result: passed
+------------------------------
+Test: Repository Commands
+Result: passed
+------------------------------
+Test: Update Checking
+Result: passed
+------------------------------
+Test: Build Commands
+Result: failed
+Error: build command failed
+------------------------------

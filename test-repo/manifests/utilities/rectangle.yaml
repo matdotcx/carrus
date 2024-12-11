@@ -1,0 +1,7 @@
+# manifests/utilities/rectangle.yaml
+name: Rectangle
+version: "latest"
+url: "https://github.com/rxhanson/Rectangle/releases/latest/download/Rectangle.dmg"
+code_sign:
+  team_id: "XSYZ3E4B7K"
+  require_notarized: true

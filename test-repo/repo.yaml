@@ -1,0 +1,6 @@
+# repo.yaml
+name: carrus-core
+description: Core manifest repository for carrus
+maintainer: Diego Iaconelli
+url: https://github.com/matdotcx/carrus-manifests
+branch: gold
