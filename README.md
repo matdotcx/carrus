@@ -1,5 +1,5 @@
 # README.md
-# Carrus
+# Carrus 🛺 
 
 Modern macOS package manager with MDM integration.
 
@@ -18,8 +18,19 @@ Modern macOS package manager with MDM integration.
 
 ## Installation
 
-```bash
-pip install carrus
+carrus is currently under development, and so is expected to be buggy. It's suggested install directly from source until further notice; 
+
+```
+# Clone the repository
+git clone https://github.com/matdotcx/carrus.git
+cd carrus
+
+# Create and activate a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate
+
+# Install in development mode
+pip install -e .
 ```
 
 ## Quick Start
@@ -49,20 +60,3 @@ carrus download firefox.yaml
 carrus build-mdm firefox.yaml
 ```
 
-## All the items below are a work in progress and don't yet exist. You've been warned.
-
-## Documentation
-
-- [Installation Guide](docs/installation.md)
-- [Recipe Format](docs/recipes.md)
-- [MDM Integration](docs/mdm_integration.md)
-- [CLI Reference](docs/cli.md)
-- [Security Features](docs/security.md)
-
-## Contributing
-
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
