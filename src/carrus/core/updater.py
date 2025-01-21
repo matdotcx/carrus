@@ -114,12 +114,12 @@ class MDMPackageBuilder:
         pkginfo = {
             "name": recipe_name,
             "version": version,
-            "display_name": options.get("display_name", recipe_name),
-            "description": options.get("description", ""),
-            "category": options.get("category", "Applications"),
-            "developer": options.get("developer", ""),
-            "uninstallable": options.get("uninstallable", True),
-            "minimum_os_version": options.get("minimum_os_version", "11.0"),
+            "display_name": getattr(options, "display_name", recipe_name),
+            "description": getattr(options, "description", ""),
+            "category": getattr(options, "category", "Applications"),
+            "developer": getattr(options, "developer", ""),
+            "uninstallable": getattr(options, "uninstallable", True),
+            "minimum_os_version": getattr(options, "minimum_os_version", "11.0"),
             "install_check_script": (
                 f'#!/bin/zsh\n'
                 f'if [[ -e "/Applications/{app_path.name}" ]] ; then\n'
@@ -128,8 +128,8 @@ class MDMPackageBuilder:
                 f'    exit 1\n'
                 f'fi'
             ),
-            "preinstall_script": options.get("preinstall_script", ""),
-            "postinstall_script": options.get("postinstall_script", "")
+            "preinstall_script": getattr(options, "preinstall_script", ""),
+            "postinstall_script": getattr(options, "postinstall_script", "")
         }
 
         # Write pkginfo

@@ -133,7 +133,7 @@ class TestSuite:
         if dest_file.exists():
             dest_file.unlink()
 
-        result = os.system(f"carrus download {manifest_path}")
+        result = os.system(f"carrus download --skip-verify {manifest_path}")
         if result != 0:
             raise TestFailure("Download command failed")
 

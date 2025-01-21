@@ -303,9 +303,27 @@ def build_mdm(
             ) as progress:
                 # First build the regular package
                 task_id = progress.add_task("Building application...", total=None)
-                build_result = await build_package(manifest_path)
+                
+                # Get the actual DMG file path
+                downloaded_file = Path(manifest.filename)
+                if not downloaded_file.exists():
+                    console.print("[red]Error: Downloaded file not found. Did you run download first?[/red]")
+                    raise typer.Exit(1)
+
+                build_config = manifest.get_build_config()
+                if not build_config:
+                    console.print("[red]Error: Manifest does not contain build configuration[/red]")
+                    raise typer.Exit(1)
+
+                if output_dir:
+                    build_config.destination = str(output_dir)
+
+                build_result = await build_package(downloaded_file, build_config, progress)
 
                 if not build_result.success:
+                    console.print("[red]Build failed![/red]")
+                    for error in build_result.errors:
+                        console.print(f"[red]  {error}[/red]")
                     raise Exception("Failed to build application package")
 
                 progress.update(task_id, completed=True)
@@ -318,7 +336,7 @@ def build_mdm(
                     build_result.output_path,
                     manifest.name,
                     manifest.version,
-                    manifest.mdm.get("kandji", {})
+                    manifest.mdm.kandji if manifest.mdm else {}
                 )
 
                 progress.update(task_id, completed=True)
