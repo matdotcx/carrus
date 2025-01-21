@@ -31,3 +31,8 @@ Temporary Items
 xcuserdata/
 *.xcscmblueprint
 *.xccheckout
+
+# Project files
+*.txt
+*.patch
+*.csv
