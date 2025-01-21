@@ -36,3 +36,8 @@ xcuserdata/
 *.txt
 *.patch
 *.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
