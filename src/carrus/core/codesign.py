@@ -8,8 +8,11 @@ import json
 from rich.console import Console
 import tempfile
 import os
+from .logging import get_audit_logger, get_debug_logger
 
 console = Console()
+audit_log = get_audit_logger()
+debug_log = get_debug_logger()
 
 @dataclass
 class SigningInfo:
@@ -91,6 +94,8 @@ def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
     debug_output = []
 
     is_dmg = path.suffix.lower() == '.dmg'
+    debug_log.info(f"Starting code sign verification for {path}")
+    debug_log.debug(f"File type: {'DMG' if is_dmg else 'Other'}")
 
     if debug:
         debug_output.append(f"File type: {'DMG' if is_dmg else 'Other'}")
@@ -98,14 +103,19 @@ def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
     check_path = path
     if is_dmg:
         try:
+            debug_log.info(f"Mounting DMG file: {path}")
             with DMGMount(path) as mount:
                 if debug:
                     debug_output.append(f"Mounted DMG, found app: {mount.app_path}")
+                debug_log.info(f"Successfully mounted DMG, found app: {mount.app_path}")
                 return verify_codesign_internal(mount.app_path, debug, debug_output)
         except Exception as e:
+            error_msg = f"Failed to process DMG: {str(e)}"
+            debug_log.error(error_msg)
+            audit_log.error(f"Code sign verification failed for DMG {path}: {error_msg}")
             return SigningInfo(
                 signed=False,
-                errors=[f"Failed to process DMG: {str(e)}"],
+                errors=[error_msg],
                 raw_output="\n".join(debug_output)
             )
     else:
@@ -113,12 +123,16 @@ def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
 
 def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -> SigningInfo:
     """Internal verification logic."""
+    debug_log.info(f"Starting internal code sign verification for {path}")
+
     # Basic codesign verification
+    debug_log.debug("Running basic codesign verification")
     stdout, stderr, returncode = run_command(
         ['codesign', '--verify', '--verbose=2', str(path)],
         "codesign verify"
     )
     is_signed = returncode == 0
+    debug_log.info(f"Basic verification result: {'signed' if is_signed else 'unsigned'}")
 
     if debug:
         debug_output.append("\nCodesign verify output:")
@@ -127,6 +141,7 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
         debug_output.append(f"return code: {returncode}")
 
     # Get detailed signing info
+    debug_log.debug("Getting detailed signing information")
     stdout, stderr, returncode = run_command(
         ['codesign', '-dvv', str(path)],
         "codesign details"
@@ -143,21 +158,34 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
     for line in (stderr or "").splitlines():
         if 'TeamIdentifier=' in line:
             team_id = line.split('=')[1]
+            debug_log.info(f"Found Team ID: {team_id}")
         if 'Authority=' in line:
-            authority.append(line.split('=')[1])
+            auth = line.split('=')[1]
+            authority.append(auth)
+            debug_log.debug(f"Found Authority: {auth}")
 
     # Check notarization
+    debug_log.debug("Checking notarization status")
     stdout, stderr, returncode = run_command(
         ['spctl', '--assess', '--verbose=2', '--type', 'execute', str(path)],
         "notarization check"
     )
     is_notarized = returncode == 0
+    debug_log.info(f"Notarization check result: {'notarized' if is_notarized else 'not notarized'}")
 
     if debug:
         debug_output.append("\nNotarization check output:")
         debug_output.append(f"stdout: {stdout}")
         debug_output.append(f"stderr: {stderr}")
         debug_output.append(f"return code: {returncode}")
+
+    # Log verification summary
+    audit_log.info(
+        f"Code sign verification completed for {path}: "
+        f"signed={is_signed}, "
+        f"team_id={team_id}, "
+        f"notarized={is_notarized}"
+    )
 
     return SigningInfo(
         signed=is_signed,
@@ -175,6 +203,11 @@ def verify_signature_requirements(
     debug: bool = True
 ) -> Tuple[bool, List[str]]:
     """Verify signature matches requirements."""
+    debug_log.info(
+        f"Verifying signature requirements for {path} "
+        f"(team_id={required_team_id}, require_notarized={require_notarized})"
+    )
+
     info = verify_codesign(path, debug=debug)
     errors = info.errors.copy()
 
@@ -183,18 +216,32 @@ def verify_signature_requirements(
         console.print(info.raw_output)
 
     if not info.signed:
-        errors.append("File is not signed")
+        error_msg = "File is not signed"
+        debug_log.error(error_msg)
+        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
+        errors.append(error_msg)
         return False, errors
 
     if required_team_id and info.team_id != required_team_id:
-        errors.append(
+        error_msg = (
             f"Team ID mismatch: found {info.team_id}, "
             f"expected {required_team_id}"
         )
+        debug_log.error(error_msg)
+        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
+        errors.append(error_msg)
         return False, errors
 
     if require_notarized and not info.notarized:
-        errors.append("File is not notarized")
+        error_msg = "File is not notarized"
+        debug_log.error(error_msg)
+        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
+        errors.append(error_msg)
         return False, errors
 
+    debug_log.info(f"Signature requirements verified successfully for {path}")
+    audit_log.info(
+        f"Signature verification passed for {path} "
+        f"(team_id={info.team_id}, notarized={info.notarized})"
+    )
     return True, []
