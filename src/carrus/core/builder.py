@@ -5,14 +5,28 @@ from pathlib import Path
 import tempfile
 import shutil
 import os
-import asyncio
+from datetime import datetime
+from typing import Optional, List, Tuple
 from rich.console import Console
 from rich.progress import Progress
-from .types import BuildType, BuildConfig, BuildResult
+from .types import (
+    BuildType, BuildStep, BuildState, BuildConfig, 
+    BuildResult
+)
 
 console = Console()
 
-# Update AppDmgBuilder in builder.py
+class BuildError(Exception):
+    """Base class for build errors."""
+    pass
+
+class DMGMountError(BuildError):
+    """Error mounting DMG file."""
+    pass
+
+class AppExtractionError(BuildError):
+    """Error extracting application."""
+    pass
 
 class AppDmgBuilder:
     """Builds application packages from DMGs."""
@@ -22,14 +36,10 @@ class AppDmgBuilder:
         source_path: Path,
         destination: Path,
         progress: Progress,
-        task_id: int
+        task_id: int,
+        build_state: BuildState
     ) -> BuildResult:
         """Build package from DMG."""
-        temp_dir = None
-        mount_point = None
-
-        # Update progress display
-        progress.update(task_id, description="Starting build...")
         console.print(f"\n[blue]Starting DMG build[/blue]")
         console.print(f"Source: {source_path}")
         console.print(f"Destination: {destination}")
@@ -37,18 +47,16 @@ class AppDmgBuilder:
         try:
             # Verify source file
             if not source_path.exists():
-                return BuildResult(
-                    success=False,
-                    errors=[f"Source file not found: {source_path}"]
-                )
+                raise BuildError(f"Source file not found: {source_path}")
 
             console.print(f"Source file size: {source_path.stat().st_size}")
 
             # Mount DMG using context manager
             progress.update(task_id, description="Mounting DMG...")
-            with DMGMount(source_path) as mount:
+            with DMGMount(source_path, build_state) as mount:
                 console.print("[blue]DMG mounted successfully[/blue]")
 
+                build_state.current_step = BuildStep.COPYING
                 # Prepare destination
                 app_name = mount.app_path.name
                 dest_path = Path(destination) / app_name
@@ -65,106 +73,115 @@ class AppDmgBuilder:
                 console.print("[blue]Copying application...[/blue]")
                 shutil.copytree(mount.app_path, dest_path, symlinks=True)
 
+                build_state.current_step = BuildStep.CLEANUP
                 progress.update(task_id, description="Build complete!")
                 console.print("[green]Application copied successfully[/green]")
 
                 return BuildResult(
                     success=True,
-                    output_path=dest_path
+                    output_path=dest_path,
+                    build_state=build_state
                 )
 
-        except Exception as e:
-            progress.update(task_id, description=f"Error: {str(e)}")
-            console.print(f"[red]Build error: {str(e)}[/red]")
+        except BuildError as e:
+            build_state.add_error(str(e))
             return BuildResult(
                 success=False,
+                build_state=build_state,
                 errors=[str(e)]
+            )
+        except Exception as e:
+            build_state.add_error(f"Unexpected error: {str(e)}")
+            return BuildResult(
+                success=False,
+                build_state=build_state,
+                errors=[f"Unexpected error: {str(e)}"]
             )
 
 class DMGMount:
     """Context manager for mounting DMG files."""
-    def __init__(self, dmg_path: Path):
+    def __init__(self, dmg_path: Path, build_state: BuildState):
         self.dmg_path = dmg_path
+        self.build_state = build_state
         self.mount_point = None
         self.app_path = None
+        self._mounted = False
+
+    def _run_command(self, cmd: List[str], description: str) -> Tuple[str, str, int]:
+        """Run a command and return stdout, stderr, and return code."""
+        console.print(f"[blue]{description}[/blue]")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.stdout:
+            console.print("[dim]Command output:[/dim]")
+            console.print(result.stdout)
+        return result.stdout, result.stderr, result.returncode
 
     def __enter__(self):
-        # Create temporary mount point
-        self.mount_point = Path(tempfile.mkdtemp())
+        try:
+            self.build_state.current_step = BuildStep.MOUNTING
+            # Create temporary mount point
+            self.mount_point = tempfile.mkdtemp()
+            self.build_state.add_temp_file(Path(self.mount_point))
+            console.print(f"Created mount point at {self.mount_point}")
 
-        console.print(f"\n[yellow]Mount Process:[/yellow]")
-        console.print(f"1. Creating mount point at {self.mount_point}")
-        console.print(f"2. Attempting to mount {self.dmg_path}")
-
-        mount_cmd = [
-            'hdiutil', 'attach',
-            str(self.dmg_path),
-            '-mountpoint', str(self.mount_point),
-            '-nobrowse', '-verbose'
-        ]
-
-        console.print("3. Running mount command...")
-        result = subprocess.run(
-            mount_cmd,
-            capture_output=True,
-            text=True
-        )
-
-        console.print("\n[yellow]Mount Results:[/yellow]")
-        if result.stdout:
-            console.print("[blue]Standard output:[/blue]")
-            for line in result.stdout.splitlines():
-                console.print(f"  {line}")
-
-        if result.stderr:
-            console.print("[blue]Standard error:[/blue]")
-            for line in result.stderr.splitlines():
-                console.print(f"  {line}")
-
-        console.print(f"Return code: {result.returncode}")
-
-        if result.returncode != 0:
-            raise RuntimeError(f"Failed to mount DMG: {result.stderr}")
-
-        console.print("\n[yellow]Finding Application:[/yellow]")
-        console.print(f"1. Searching in {self.mount_point}")
-        app_paths = list(Path(self.mount_point).glob("*.app"))
-        if not app_paths:
-            console.print("2. Not found in root, searching subdirectories...")
-            app_paths = list(Path(self.mount_point).rglob("*.app"))
-
-        if app_paths:
-            self.app_path = app_paths[0]
-            console.print(f"✓ Found app at: {self.app_path}")
-        else:
-            raise RuntimeError("No .app bundle found in DMG")
-
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.mount_point:
-            console.print("\n[yellow]Cleanup Process:[/yellow]")
-            console.print(f"1. Unmounting {self.mount_point}")
-            detach_cmd = ['hdiutil', 'detach', str(self.mount_point), '-force', '-verbose']
-            result = subprocess.run(
-                detach_cmd,
-                capture_output=True,
-                text=True
+            # Mount DMG
+            stdout, stderr, returncode = self._run_command(
+                [
+                    'hdiutil', 'attach',
+                    str(self.dmg_path),
+                    '-mountpoint', str(self.mount_point),
+                    '-nobrowse', '-quiet'
+                ],
+                "Mounting DMG"
             )
 
-            if result.stdout or result.stderr:
-                console.print("[blue]Unmount output:[/blue]")
-                if result.stdout:
-                    console.print(result.stdout)
-                if result.stderr:
-                    console.print(result.stderr)
+            if returncode != 0:
+                raise DMGMountError(f"Failed to mount DMG: {stderr}")
 
+            self._mounted = True
+            
+            # Find the .app bundle
+            self.build_state.current_step = BuildStep.EXTRACTION
+            app_paths = list(Path(self.mount_point).glob("*.app"))
+            if not app_paths:
+                console.print("[yellow]No .app found in root, searching subdirectories...[/yellow]")
+                app_paths = list(Path(self.mount_point).rglob("*.app"))
+
+            if app_paths:
+                self.app_path = app_paths[0]
+                console.print(f"[green]Found app at: {self.app_path}[/green]")
+            else:
+                raise AppExtractionError("No .app bundle found in DMG")
+
+            return self
+
+        except Exception as e:
+            self.cleanup()
+            if isinstance(e, (DMGMountError, AppExtractionError)):
+                raise
+            raise BuildError(f"DMG mount failed: {str(e)}")
+
+    def cleanup(self):
+        """Clean up mount point and mounted DMG."""
+        if self._mounted:
             try:
-                console.print("2. Removing mount point directory")
-                os.rmdir(self.mount_point)
-                console.print("✓ Cleanup complete")
-            except OSError as e:
-                console.print(f"[yellow]Warning: Could not remove mount point: {e}[/yellow]")
+                self._run_command(
+                    ['hdiutil', 'detach', self.mount_point, '-force'],
+                    "Unmounting DMG"
+                )
+                self._mounted = False
+            except Exception as e:
+                self.build_state.add_warning(f"Failed to unmount DMG: {e}")
+
+        if self.mount_point and Path(self.mount_point).exists():
+            try:
+                shutil.rmtree(self.mount_point)
+                self.mount_point = None
+            except Exception as e:
+                self.build_state.add_warning(f"Failed to remove mount point: {e}")
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cleanup()
 
 async def build_package(
     source_path: Path,
@@ -172,6 +189,13 @@ async def build_package(
     progress: Progress,
 ) -> BuildResult:
     """Build a package based on configuration."""
+
+    build_state = BuildState(
+        started_at=datetime.now(),
+        build_type=build_config.type,
+        source_path=source_path,
+        destination=Path(build_config.destination)
+    )
 
     console.print("[blue]Starting package build[/blue]")
     console.print(f"Source path: {source_path}")
@@ -181,33 +205,77 @@ async def build_package(
     task_id = progress.add_task("Building package...", total=None)
 
     try:
+        build_state.current_step = BuildStep.VALIDATION
+        # Validate inputs
+        validation_errors = []
+        
+        if not source_path.exists():
+            validation_errors.append(f"Source file not found: {source_path}")
+        elif not source_path.is_file():
+            validation_errors.append(f"Source path is not a file: {source_path}")
+            
+        if validation_errors:
+            build_state.errors.extend(validation_errors)
+            return BuildResult(
+                success=False,
+                build_state=build_state,
+                errors=validation_errors
+            )
+
+        # Create destination directory
         destination = Path(build_config.destination)
-        destination.mkdir(parents=True, exist_ok=True)
+        try:
+            destination.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            error = f"Failed to create destination directory: {e}"
+            build_state.add_error(error)
+            return BuildResult(
+                success=False,
+                build_state=build_state,
+                errors=[error]
+            )
 
         # Convert string to BuildType
         try:
             build_type = BuildType(build_config.type)
-            console.print(f"[blue]Build type resolved to: {build_type}[/blue]")
         except ValueError:
+            error = f"Invalid build type: {build_config.type}"
+            build_state.add_error(error)
             return BuildResult(
                 success=False,
-                errors=[f"Invalid build type: {build_config.type}"]
+                build_state=build_state,
+                errors=[error]
             )
 
         if build_type == BuildType.APP_DMG:
-            console.print("[blue]Using AppDmgBuilder[/blue]")
-            return await AppDmgBuilder.build(source_path, destination, progress, task_id)
+            return await AppDmgBuilder.build(
+                source_path,
+                destination,
+                progress,
+                task_id,
+                build_state
+            )
 
+        error = f"Unsupported build type: {build_type}"
+        build_state.add_error(error)
         return BuildResult(
             success=False,
-            errors=[f"Unsupported build type: {build_type}"]
+            build_state=build_state,
+            errors=[error]
         )
 
     except Exception as e:
-        console.print(f"[red]Build error: {str(e)}[/red]")
+        error = f"Unexpected build error: {str(e)}"
+        build_state.add_error(error)
+        console.print(f"[red]{error}[/red]")
         return BuildResult(
             success=False,
-            errors=[str(e)]
+            build_state=build_state,
+            errors=[error]
         )
     finally:
+        if not build_config.preserve_temp:
+            cleanup_errors = build_state.cleanup()
+            if cleanup_errors:
+                build_state.warnings.extend(cleanup_errors)
         progress.update(task_id, completed=True)
