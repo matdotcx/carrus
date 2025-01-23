@@ -4,14 +4,16 @@ target-version = "py311"
 
 [lint]
 select = [
-    "E",   # pycodestyle errors
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "S",   # flake8-bandit
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "I", # isort
+    "B", # flake8-bugbear
+    "S", # flake8-bandit
 ]
-ignore = []
-
+ignore = [
+    "E501", # Line too long (temporarily)
+    "S101", # Use of assert (allow in tests)
+]
 [format]
 quote-style = "double"
 indent-style = "space"

@@ -39,6 +39,13 @@ xcuserdata/
 *.md
 
 # Python
+*.pyc
+__pycache__/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 *$py.class
