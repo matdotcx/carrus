@@ -80,8 +80,8 @@ class Database:
                         install_date TIMESTAMP,
                         checksum TEXT,
                         status TEXT DEFAULT 'not_installed',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+                        updated_at TIMESTAMP DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
                         UNIQUE(name, version)
                     )
                 """)
@@ -166,7 +166,7 @@ class Database:
                     CREATE TRIGGER IF NOT EXISTS update_package_timestamp 
                     AFTER UPDATE ON packages
                     BEGIN
-                        UPDATE packages SET updated_at = CURRENT_TIMESTAMP 
+                        UPDATE packages SET updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
                         WHERE id = NEW.id;
                     END;
                 """)
@@ -203,15 +203,15 @@ class Database:
             raise MigrationError(f"Failed to apply migrations: {e}")
 
     def add_package(self, name: str, version: str, install_path: Optional[str] = None,
-                   checksum: Optional[str] = None) -> int:
+                   checksum: Optional[str] = None, status: str = "not_installed") -> int:
         """Add a new package to the database."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO packages (name, version, install_path, checksum)
-                    VALUES (?, ?, ?, ?)
-                    """, (name, version, install_path, checksum))
+                    INSERT INTO packages (name, version, install_path, checksum, status)
+                    VALUES (?, ?, ?, ?, ?)
+                    """, (name, version, install_path, checksum, status))
                 conn.commit()
                 return cursor.lastrowid
         except sqlite3.Error as e:
@@ -223,6 +223,10 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
+                cursor.execute("SELECT id FROM packages WHERE id = ?", (package_id,))
+                if not cursor.fetchone():
+                    raise DatabaseError(f"Package with ID {package_id} not found")
+                
                 cursor.execute("""
                     UPDATE packages 
                     SET status = ? 
@@ -257,7 +261,7 @@ class Database:
                 cursor.execute("""
                     SELECT * FROM install_history
                     WHERE package_id = ?
-                    ORDER BY created_at DESC
+                    ORDER BY id DESC
                     """, (package_id,))
                 return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
