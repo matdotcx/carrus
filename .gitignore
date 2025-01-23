@@ -36,6 +36,7 @@ xcuserdata/
 *.txt
 *.patch
 *.csv
+*.md
 
 # Python
 __pycache__/
