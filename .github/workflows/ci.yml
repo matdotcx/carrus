@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: macos-latest  # Since this is a macOS package manager
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install hatch pytest pytest-asyncio ruff
+        pip install -e .
+        
+    - name: Lint with ruff
+      run: |
+        ruff check .
+        ruff format --check .
+        
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v
+
+  build:
+    needs: test
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+        
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install hatch
+        
+    - name: Build package
+      run: |
+        hatch build
+        
+    - name: Upload dist artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
