@@ -1,5 +1,4 @@
 """Tests for recipe manifest handling."""
-
 import tempfile
 from pathlib import Path
 from unittest.mock import mock_open, patch
@@ -7,10 +6,11 @@ from unittest.mock import mock_open, patch
 import pytest
 
 from carrus.core.manifests import (
-    Recipe,  # Assuming dataclass
-    construct_url,
-    load_manifest,
-    parse_version,
+    Manifest,
+    CodeSignRequirements,
+    BuildOptions,
+    KandjiOptions,
+    MDMOptions,
 )
 
 
@@ -21,59 +21,61 @@ def mock_recipe_file():
         yield Path(tmp.name)
 
 
-def test_recipe_loading(mock_recipe_file):
-    """Test loading recipe from YAML."""
+def test_manifest_loading(mock_recipe_file):
+    """Test loading manifest from YAML."""
     recipe_data = """
     name: Firefox
     version: "115.0"
+    type: app
     url: "https://download.mozilla.org/?product=firefox-{version}"
-    team_id: "43AQ936H96"
+    code_sign:
+        team_id: "43AQ936H96"
+        require_notarized: true
     """
     with patch("builtins.open", mock_open(read_data=recipe_data)):
-        recipe = load_manifest(mock_recipe_file)
-        assert recipe.name == "Firefox"
-        assert recipe.version == "115.0"
+        manifest = Manifest.from_yaml(mock_recipe_file)
+        assert manifest.name == "Firefox"
+        assert manifest.version == "115.0"
+        assert manifest.code_sign.team_id == "43AQ936H96"
 
 
-def test_version_extraction():
-    """Test version string parsing."""
-    assert parse_version("Firefox 115.0.dmg") == "115.0"
-    assert parse_version("Chrome 120.0.6099.129.pkg") == "120.0.6099.129"
+def test_build_options():
+    """Test build options configuration."""
+    build_opts = BuildOptions(
+        type="pkg",
+        destination="/Applications",
+        customize=[{"action": "set_ownership", "user": "root", "group": "wheel"}]
+    )
+    assert build_opts.type == "pkg"
+    assert build_opts.destination == "/Applications"
+    assert build_opts.customize[0]["action"] == "set_ownership"
 
 
-def test_url_construction():
-    """Test download URL construction."""
-    recipe = Recipe(
+def test_kandji_options():
+    """Test Kandji MDM options."""
+    kandji_opts = KandjiOptions(
+        display_name="Firefox Browser",
+        category="Web Browsers",
+        minimum_os_version="12.0"
+    )
+    assert kandji_opts.display_name == "Firefox Browser"
+    assert kandji_opts.category == "Web Browsers"
+    assert kandji_opts.minimum_os_version == "12.0"
+
+
+def test_manifest_build_config():
+    """Test build configuration extraction."""
+    manifest = Manifest(
         name="Firefox",
         version="115.0",
-        url="https://download.mozilla.org/?product=firefox-{version}",
+        type="app",
+        url="https://example.com/firefox.dmg",
+        build=BuildOptions(
+            type="pkg",
+            destination="/Applications"
+        )
     )
-    url = construct_url(recipe)
-    assert url == "https://download.mozilla.org/?product=firefox-115.0"
-
-
-def test_parent_recipe_inheritance():
-    """Test recipe inheritance chain."""
-    parent_data = """
-    name: BrowserBase
-    team_id: "43AQ936H96"
-    """
-    child_data = """
-    parent: BrowserBase
-    name: Firefox
-    version: "115.0"
-    """
-    with patch("builtins.open") as mock_file:
-        mock_file.side_effect = [
-            mock_open(read_data=child_data).return_value,
-            mock_open(read_data=parent_data).return_value,
-        ]
-        recipe = load_manifest(Path("firefox.yaml"))
-        assert recipe.team_id == "43AQ936H96"  # Inherited
-        assert recipe.name == "Firefox"  # Overridden
-
-
-def test_version_validation():
-    """Test version format validation."""
-    with pytest.raises(ValueError):
-        Recipe(name="Test", version="invalid")
+    build_config = manifest.get_build_config()
+    assert build_config is not None
+    assert build_config.type == "pkg"
+    assert build_config.destination == "/Applications"
