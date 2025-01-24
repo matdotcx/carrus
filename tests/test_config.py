@@ -47,7 +47,13 @@ def test_save_config(mock_config_file):
     config = Config(db_path="test.db", log_dir="logs")
     with patch("builtins.open", mock_open()) as mock_file:
         save_config(config, mock_config_file)
-        mock_file().write.assert_called_once()
+        # Verify file was opened for writing
+        mock_file.assert_called_once_with(mock_config_file, "w")
+        # Check that write was called and the written data contains our config values
+        assert mock_file().write.call_count > 0
+        written_data = "".join(call.args[0] for call in mock_file().write.call_args_list)
+        assert "db_path: test.db" in written_data
+        assert "log_dir: logs" in written_data
 
 
 def test_get_default_config():
