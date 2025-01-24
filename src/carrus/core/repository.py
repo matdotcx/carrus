@@ -1,13 +1,14 @@
 # src/carrus/core/repository.py
 
-from pathlib import Path
-from typing import Dict, List, Optional, Set
-from dataclasses import dataclass
-import yaml
-from rich.console import Console
-from rich.table import Table
-import sqlite3
 import json
+import sqlite3
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional
+
+import yaml
+from rich.table import Table
+
 
 @dataclass
 class RepoMetadata:
@@ -120,7 +121,7 @@ class RepositoryManager:
             """
 
             if category:
-                query += f" AND manifests.category = ?"
+                query += " AND manifests.category = ?"
                 params = (category,)
             else:
                 params = ()

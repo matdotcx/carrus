@@ -1,13 +1,13 @@
 """Tests for the Carrus database implementation."""
 
-import pytest
-import sqlite3
-from pathlib import Path
-import tempfile
 import shutil
-from datetime import datetime
+import tempfile
+from pathlib import Path
 
-from carrus.core.database import Database, DatabaseError, MigrationError
+import pytest
+
+from carrus.core.database import Database, DatabaseError
+
 
 @pytest.fixture
 def db():

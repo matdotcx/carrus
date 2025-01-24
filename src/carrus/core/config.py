@@ -1,6 +1,7 @@
 # src/carrus/core/config.py
-from pathlib import Path
 import os
+from pathlib import Path
+
 
 def get_config_dir() -> Path:
     """Get the carrus configuration directory."""

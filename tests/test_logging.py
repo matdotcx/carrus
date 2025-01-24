@@ -1,16 +1,19 @@
 """Tests for the logging system."""
 
-import pytest
-from pathlib import Path
-import tempfile
 import logging
+import tempfile
+from pathlib import Path
+
+import pytest
+
 from carrus.core.logging import (
-    setup_logging,
+    AUDIT_LOGGER,
+    DEBUG_LOGGER,
     get_audit_logger,
     get_debug_logger,
-    AUDIT_LOGGER,
-    DEBUG_LOGGER
+    setup_logging,
 )
+
 
 @pytest.fixture
 def temp_log_dir():

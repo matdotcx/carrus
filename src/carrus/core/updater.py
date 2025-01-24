@@ -1,14 +1,14 @@
 # src/carrus/core/updater.py
 
-import aiohttp
 import asyncio
-from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
-from dataclasses import dataclass
 import json
-import re
-from datetime import datetime
 import logging
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import aiohttp
 from packaging import version
 
 logger = logging.getLogger(__name__)

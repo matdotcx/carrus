@@ -1,10 +1,13 @@
 # src/carrus/core/manifests.py
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
+
 import yaml
-from .types import BuildType, BuildConfig
+from pydantic import BaseModel
+
+from .types import BuildConfig
+
 
 class CodeSignRequirements(BaseModel):
     """Code signing requirements for a package."""

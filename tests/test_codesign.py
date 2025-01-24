@@ -1,17 +1,19 @@
 """Tests for code signing verification."""
 
-import pytest
-from pathlib import Path
-import tempfile
 import logging
-from unittest.mock import patch, MagicMock
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
 from carrus.core.codesign import (
-    SigningInfo,
     DMGMount,
+    SigningInfo,
     verify_codesign,
-    verify_codesign_internal,
-    verify_signature_requirements
+    verify_signature_requirements,
 )
+
 
 @pytest.fixture
 def mock_dmg():
@@ -42,7 +44,7 @@ def test_dmg_mount_context_manager(mock_dmg):
         mock_run.return_value.returncode = 0
         
         # Mock app discovery
-        mock_app = Path('/tmp/mount/TestApp.app')
+        mock_app = Path(tempfile.mkdtemp(prefix='carrus_test_')) / 'app.app'
         mock_glob.return_value = [mock_app]
         mock_rglob.return_value = []  # Not needed since glob finds it
         
@@ -90,7 +92,7 @@ def test_verify_codesign_dmg(mock_run, mock_dmg):
     ]
     
     with patch('carrus.core.codesign.DMGMount') as mock_mount:
-        mock_mount.return_value.__enter__.return_value.app_path = Path("/tmp/test.app")
+        mock_mount.return_value.__enter__.return_value.app_path = Path(tempfile.mkdtemp(prefix='carrus_test_')) / 'test.app'
         result = verify_codesign(mock_dmg)
         
         assert result.signed

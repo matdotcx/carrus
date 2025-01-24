@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 # test_suite.py
 
+import asyncio
+import os
+import shutil
+import sys
+import tempfile
+from datetime import datetime
+from pathlib import Path
+
 import typer
+import yaml
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from pathlib import Path
-import asyncio
-import tempfile
-import shutil
-import yaml
-import sys
-import os
-from datetime import datetime
+
+from tests.command_runner import run_carrus
 
 console = Console()
 app = typer.Typer()
@@ -120,9 +123,10 @@ class TestSuite:
 
     async def test_help_command(self):
         """Test the help command."""
-        result = os.system("carrus --help")
-        if result != 0:
-            raise TestFailure("Help command failed")
+        try:
+            run_carrus(["--help"])
+        except Exception as e:
+            raise TestFailure("Help command failed") from e
 
     async def test_download_command(self):
         """Test downloading a package."""
@@ -133,9 +137,10 @@ class TestSuite:
         if dest_file.exists():
             dest_file.unlink()
 
-        result = os.system(f"carrus download --skip-verify {manifest_path}")
-        if result != 0:
-            raise TestFailure("Download command failed")
+        try:
+            run_carrus(["download", "--skip-verify", str(manifest_path)])
+        except Exception as e:
+            raise TestFailure("Download command failed") from e
 
         # Verify file exists
         if not dest_file.exists():
@@ -150,33 +155,38 @@ class TestSuite:
         if not Path("Firefox-123.0.dmg").exists():
             await self.test_download_command()
 
-        result = os.system("carrus verify Firefox-123.0.dmg")
-        if result != 0:
-            raise TestFailure("Verify command failed")
+        try:
+            run_carrus(["verify", "Firefox-123.0.dmg"])
+        except Exception as e:
+            raise TestFailure("Verify command failed") from e
 
     async def test_repo_commands(self):
         """Test repository management commands."""
         # Add repository
-        result = os.system(f"carrus repo-add {self.test_repo}")
-        if result != 0:
-            raise TestFailure("repo-add command failed")
+        try:
+            run_carrus(["repo-add", str(self.test_repo)])
+        except Exception as e:
+            raise TestFailure("repo-add command failed") from e
 
         # List repositories
-        result = os.system("carrus repo-list")
-        if result != 0:
-            raise TestFailure("repo-list command failed")
+        try:
+            run_carrus(["repo-list"])
+        except Exception as e:
+            raise TestFailure("repo-list command failed") from e
 
         # Search repositories
-        result = os.system("carrus search browsers")
-        if result != 0:
-            raise TestFailure("search command failed")
+        try:
+            run_carrus(["search", "browsers"])
+        except Exception as e:
+            raise TestFailure("search command failed") from e
 
     async def test_check_updates(self):
         """Test update checking."""
         manifest_path = self.test_repo / "manifests" / "browsers" / "firefox.yaml"
-        result = os.system(f"carrus check-updates {manifest_path}")
-        if result != 0:
-            raise TestFailure("check-updates command failed")
+        try:
+            run_carrus(["check-updates", str(manifest_path)])
+        except Exception as e:
+            raise TestFailure("check-updates command failed") from e
 
     async def test_build_commands(self):
         """Test build commands."""
@@ -196,18 +206,20 @@ class TestSuite:
         mdm_dir.mkdir(parents=True, exist_ok=True)
 
         # Test regular build
-        result = os.system(f"carrus build --output {build_dir} {manifest_path}")
-        if result != 0:
-            raise TestFailure("build command failed")
+        try:
+            run_carrus(["build", "--output", str(build_dir), str(manifest_path)])
+        except Exception as e:
+            raise TestFailure("build command failed") from e
 
         # Verify the app exists
         if not (build_dir / "Firefox.app").exists():
             raise TestFailure("Built application not found")
 
         # Test MDM build
-        result = os.system(f"carrus build-mdm --output {mdm_dir} {manifest_path}")
-        if result != 0:
-            raise TestFailure("build-mdm command failed")
+        try:
+            run_carrus(["build-mdm", "--output", str(mdm_dir), str(manifest_path)])
+        except Exception as e:
+            raise TestFailure("build-mdm command failed") from e
 
     async def run_all_tests(self):
         """Run all test cases."""

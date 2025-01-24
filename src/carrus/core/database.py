@@ -1,12 +1,10 @@
 """Database management and schema for Carrus."""
 
-import sqlite3
-from pathlib import Path
-import json
-from typing import Optional, Dict, Any, List
-from datetime import datetime
 import logging
+import sqlite3
 from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +58,7 @@ class Database:
                     self._apply_migrations(conn, current_version)
                 
         except sqlite3.Error as e:
-            logger.error(f"Database initialization failed: {e}")
-            raise DatabaseError(f"Failed to initialize database: {e}")
+                        raise DatabaseError(f"Failed to initialize database: {e}") from e
 
     def _apply_migrations(self, conn: sqlite3.Connection, current_version: int):
         """Apply necessary database migrations."""
@@ -200,7 +197,7 @@ class Database:
         except sqlite3.Error as e:
             conn.rollback()
             logger.error(f"Migration failed: {e}")
-            raise MigrationError(f"Failed to apply migrations: {e}")
+            raise MigrationError(f"Failed to apply migrations: {e}") from e
 
     def add_package(self, name: str, version: str, install_path: Optional[str] = None,
                    checksum: Optional[str] = None, status: str = "not_installed") -> int:
@@ -215,8 +212,7 @@ class Database:
                 conn.commit()
                 return cursor.lastrowid
         except sqlite3.Error as e:
-            logger.error(f"Failed to add package: {e}")
-            raise DatabaseError(f"Failed to add package: {e}")
+                        raise DatabaseError(f"Failed to add package: {e}") from e
 
     def update_package_status(self, package_id: int, status: str):
         """Update package installation status."""
@@ -234,8 +230,7 @@ class Database:
                     """, (status, package_id))
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to update package status: {e}")
-            raise DatabaseError(f"Failed to update package status: {e}")
+                        raise DatabaseError(f"Failed to update package status: {e}") from e
 
     def add_install_history(self, package_id: int, version: str, action: str,
                           status: str, error_message: Optional[str] = None):
@@ -250,8 +245,7 @@ class Database:
                     """, (package_id, version, action, status, error_message))
                 conn.commit()
         except sqlite3.Error as e:
-            logger.error(f"Failed to add install history: {e}")
-            raise DatabaseError(f"Failed to add install history: {e}")
+                        raise DatabaseError(f"Failed to add install history: {e}") from e
 
     def get_package_history(self, package_id: int) -> List[Dict[str, Any]]:
         """Get installation history for a package."""
@@ -265,8 +259,7 @@ class Database:
                     """, (package_id,))
                 return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
-            logger.error(f"Failed to get package history: {e}")
-            raise DatabaseError(f"Failed to get package history: {e}")
+                        raise DatabaseError(f"Failed to get package history: {e}") from e
 
     def backup_database(self, backup_path: Path):
         """Create a backup of the database."""
@@ -276,8 +269,7 @@ class Database:
                 conn.backup(backup_conn)
                 backup_conn.close()
         except sqlite3.Error as e:
-            logger.error(f"Database backup failed: {e}")
-            raise DatabaseError(f"Failed to create database backup: {e}")
+                        raise DatabaseError(f"Failed to create database backup: {e}") from e
 
     def restore_database(self, backup_path: Path):
         """Restore database from backup."""
@@ -290,5 +282,4 @@ class Database:
                 backup_conn.backup(conn)
                 backup_conn.close()
         except sqlite3.Error as e:
-            logger.error(f"Database restore failed: {e}")
-            raise DatabaseError(f"Failed to restore database: {e}")
+                        raise DatabaseError(f"Failed to restore database: {e}") from e

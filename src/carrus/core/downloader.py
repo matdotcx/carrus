@@ -1,9 +1,7 @@
 import hashlib
 from pathlib import Path
-from typing import Optional
 
 import aiohttp
-import asyncio
 from rich.progress import Progress
 
 from .logging import get_audit_logger, get_debug_logger

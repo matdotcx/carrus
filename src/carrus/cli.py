@@ -1,32 +1,44 @@
 # src/carrus/cli.py
 
+import asyncio
+from pathlib import Path
+from typing import Optional
+
 import typer
+import yaml
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
-from pathlib import Path
-from typing import Optional
-import asyncio
-import yaml
 
-app = typer.Typer(
-    name="carrus",
-    help="Modern macOS package manager"
-)
+# CLI argument/option definitions
+MANIFEST_PATH = typer.Argument(..., help="Path to the manifest file")
+OUTPUT_DIR = typer.Option(None, "--output", "-o", help="Output directory")
+SKIP_VERIFY = typer.Option(False, "--skip-verify", help="Skip verification steps")
+BUILD_IF_NEEDED = typer.Option(False, "--build", "-b", help="Build if update available")
+REPO_PATH = typer.Argument(..., help="Path to repository")
+REPO_NAME = typer.Option(None, help="Repository name (optional)")
+TEAM_ID = typer.Option(None, help="Required Team ID")
+REQUIRE_NOTARIZED = typer.Option(True, help="Require notarization")
+DEBUG = typer.Option(False, "--debug", "-d", help="Show debug information")
+CATEGORY_FILTER = typer.Option(None, help="Limit to category")
+SEARCH_TERM = typer.Argument(..., help="Search term")
+
+app = typer.Typer(name="carrus", help="Modern macOS package manager")
 console = Console()
+
 
 # Within the download command in cli.py
 @app.command()
 def download(
-    manifest_path: Path = typer.Argument(..., help="Path to the manifest file"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Output directory"),
-    skip_verify: bool = typer.Option(False, "--skip-verify", help="Skip verification steps")
+    manifest_path: Path = MANIFEST_PATH,
+    output_dir: Optional[Path] = OUTPUT_DIR,
+    skip_verify: bool = SKIP_VERIFY,
 ):
     """Download a package from its manifest."""
     try:
-        from .core.manifests import Manifest
-        from .core.downloader import download_file, verify_checksum
         from .core.codesign import verify_signature_requirements
+        from .core.downloader import download_file, verify_checksum
+        from .core.manifests import Manifest
 
         manifest = Manifest.from_yaml(manifest_path)
         output_dir = output_dir or Path.cwd()
@@ -38,7 +50,7 @@ def download(
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console
+                console=console,
             ) as progress:
                 await download_file(str(manifest.url), dest_path, progress)
 
@@ -59,7 +71,7 @@ def download(
                         dest_path,
                         required_team_id=manifest.code_sign.team_id,
                         require_notarized=manifest.code_sign.require_notarized,
-                        debug=False
+                        debug=False,
                     )
                     if passed:
                         console.print("[green]Code signing verification passed!")
@@ -72,15 +84,15 @@ def download(
         asyncio.run(do_download())
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}")
-        raise typer.Exit(1)
+                raise typer.Exit(1) from e
+
 
 @app.command()
 def verify(
-    package: Path,
-    team_id: Optional[str] = typer.Option(None, help="Required Team ID"),
-    require_notarized: bool = typer.Option(True, help="Require notarization"),
-    debug: bool = typer.Option(False, "--debug", "-d", help="Show debug information")
+    package: Path = MANIFEST_PATH,
+    team_id: Optional[str] = TEAM_ID,
+    require_notarized: bool = REQUIRE_NOTARIZED,
+    debug: bool = DEBUG,
 ):
     """Verify a package's signature and notarization."""
     try:
@@ -100,9 +112,7 @@ def verify(
             console.print("Signing Authorities:")
             for auth in info.authority:
                 console.print(f"  - {auth}")
-        console.print(
-            f"Notarized: {'[green]Yes' if info.notarized else '[red]No'}[/]"
-        )
+        console.print(f"Notarized: {'[green]Yes' if info.notarized else '[red]No'}[/]")
 
         if debug and info.raw_output:
             console.print("\n[bold blue]Debug Information:[/bold blue]")
@@ -114,18 +124,15 @@ def verify(
                 console.print(f"  - {error}")
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}")
-        raise typer.Exit(1)
+                raise typer.Exit(1) from e
+
 
 @app.command()
-def repo_add(
-    path: Path = typer.Argument(..., help="Path to repository"),
-    name: Optional[str] = typer.Option(None, help="Repository name (optional)")
-):
+def repo_add(path: Path = REPO_PATH, name: Optional[str] = REPO_NAME):
     """Add a manifest repository."""
     try:
+        from .core.config import ensure_dirs
         from .core.repository import RepositoryManager
-        from .core.config import ensure_dirs, get_repo_dir
 
         _, repo_dir = ensure_dirs()
         repo_manager = RepositoryManager(repo_dir)
@@ -134,32 +141,32 @@ def repo_add(
         console.print(f"Description: {metadata.description}")
         console.print(f"Maintainer: {metadata.maintainer}")
     except Exception as e:
-        console.print(f"[red]Error adding repository: {e}")
-        raise typer.Exit(1)
+                raise typer.Exit(1) from e
+
 
 @app.command()
 def repo_list():
     """List all repositories."""
     try:
-        from .core.repository import RepositoryManager
         from .core.config import get_repo_dir
+        from .core.repository import RepositoryManager
 
         repo_manager = RepositoryManager(get_repo_dir())
         table = repo_manager.list_manifests()
         console.print(table)
     except Exception as e:
-        console.print(f"[red]Error listing repositories: {e}")
-        raise typer.Exit(1)
+                raise typer.Exit(1) from e
+
 
 @app.command()
 def search(
-    term: str = typer.Argument(..., help="Search term"),
-    category: Optional[str] = typer.Option(None, help="Limit to category")
+    term: str = SEARCH_TERM,
+    category: Optional[str] = CATEGORY_FILTER,
 ):
     """Search for manifests."""
     try:
-        from .core.repository import RepositoryManager
         from .core.config import get_repo_dir
+        from .core.repository import RepositoryManager
 
         repo_manager = RepositoryManager(get_repo_dir())
         manifests = repo_manager.search_manifests(term, category)
@@ -172,23 +179,21 @@ def search(
 
         for manifest in manifests:
             table.add_row(
-                manifest.name,
-                manifest.category,
-                manifest.repo_name,
-                manifest.description or ""
+                manifest.name, manifest.category, manifest.repo_name, manifest.description or ""
             )
 
         console.print(table)
     except Exception as e:
-        console.print(f"[red]Error searching manifests: {e}")
-        raise typer.Exit(1)
+                raise typer.Exit(1) from e
+
 
 @app.command()
 def check_updates(
-    manifest_path: Path = typer.Argument(..., help="Path to the manifest file"),
-    build_if_needed: bool = typer.Option(False, "--build", "-b", help="Build if update available")
+    manifest_path: Path = MANIFEST_PATH,
+    build_if_needed: bool = BUILD_IF_NEEDED,
 ):
     """Check for updates to a package."""
+
     async def async_check():
         try:
             from .core.manifests import Manifest
@@ -200,14 +205,14 @@ def check_updates(
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console
+                console=console,
             ) as progress:
                 task_id = progress.add_task("Checking for updates...", total=None)
                 update_info = await checker.check_update(manifest.version)
                 progress.update(task_id, completed=True)
 
                 if update_info:
-                    console.print(f"[yellow]Update available![/yellow]")
+                    console.print("[yellow]Update available![/yellow]")
                     console.print(f"Current version: {update_info.current_version}")
                     console.print(f"Latest version: {update_info.latest_version}")
 
@@ -228,21 +233,22 @@ def check_updates(
                     console.print("[green]Package is up to date![/green]")
 
         except Exception as e:
-            console.print(f"[red]Error: {str(e)}")
-            raise typer.Exit(1)
+                        raise typer.Exit(1) from e
 
     asyncio.run(async_check())
 
+
 @app.command()
 def build(
-    manifest_path: Path = typer.Argument(..., help="Path to the manifest file"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Output directory")
+    manifest_path: Path = MANIFEST_PATH,
+    output_dir: Optional[Path] = OUTPUT_DIR,
 ):
     """Build a package."""
+
     async def async_build():
         try:
-            from .core.manifests import Manifest
             from .core.builder import build_package
+            from .core.manifests import Manifest
 
             manifest = Manifest.from_yaml(manifest_path)
             console.print(f"[blue]Loading manifest: {manifest_path}[/blue]")
@@ -250,7 +256,9 @@ def build(
             # Get the actual DMG file path
             downloaded_file = Path(manifest.filename)
             if not downloaded_file.exists():
-                console.print("[red]Error: Downloaded file not found. Did you run download first?[/red]")
+                console.print(
+                    "[red]Error: Downloaded file not found. Did you run download first?[/red]"
+                )
                 raise typer.Exit(1)
 
             build_config = manifest.get_build_config()
@@ -264,12 +272,14 @@ def build(
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console
+                console=console,
             ) as progress:
                 result = await build_package(downloaded_file, build_config, progress)
 
                 if result.success:
-                    console.print(f"[green]Successfully built package: {result.output_path}[/green]")
+                    console.print(
+                        f"[green]Successfully built package: {result.output_path}[/green]"
+                    )
                 else:
                     console.print("[red]Build failed![/red]")
                     for error in result.errors:
@@ -277,21 +287,22 @@ def build(
                     raise typer.Exit(1)
 
         except Exception as e:
-            console.print(f"[red]Error: {str(e)}[/red]")
-            raise typer.Exit(1)
+                        raise typer.Exit(1) from e
 
     asyncio.run(async_build())
 
+
 @app.command()
 def build_mdm(
-    manifest_path: Path = typer.Argument(..., help="Path to the manifest file"),
-    output_dir: Optional[Path] = typer.Option(None, "--output", "-o", help="Output directory")
+    manifest_path: Path = MANIFEST_PATH,
+    output_dir: Optional[Path] = OUTPUT_DIR,
 ):
     """Build an MDM-ready package."""
+
     async def async_build():
         try:
-            from .core.manifests import Manifest
             from .core.builder import build_package
+            from .core.manifests import Manifest
             from .core.updater import MDMPackageBuilder
 
             manifest = Manifest.from_yaml(manifest_path)
@@ -299,15 +310,17 @@ def build_mdm(
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console
+                console=console,
             ) as progress:
                 # First build the regular package
                 task_id = progress.add_task("Building application...", total=None)
-                
+
                 # Get the actual DMG file path
                 downloaded_file = Path(manifest.filename)
                 if not downloaded_file.exists():
-                    console.print("[red]Error: Downloaded file not found. Did you run download first?[/red]")
+                    console.print(
+                        "[red]Error: Downloaded file not found. Did you run download first?[/red]"
+                    )
                     raise typer.Exit(1)
 
                 build_config = manifest.get_build_config()
@@ -336,17 +349,17 @@ def build_mdm(
                     build_result.output_path,
                     manifest.name,
                     manifest.version,
-                    manifest.mdm.kandji if manifest.mdm else {}
+                    manifest.mdm.kandji if manifest.mdm else {},
                 )
 
                 progress.update(task_id, completed=True)
                 console.print(f"[green]Successfully created MDM package: {pkg_path}")
 
         except Exception as e:
-            console.print(f"[red]Error: {str(e)}")
-            raise typer.Exit(1)
+                        raise typer.Exit(1) from e
 
     asyncio.run(async_build())
+
 
 if __name__ == "__main__":
     app()

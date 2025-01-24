@@ -1,14 +1,17 @@
 """Tests for download and checksum verification."""
 
-import pytest
-import aiohttp
-from pathlib import Path
-import tempfile
 import hashlib
 import logging
-from unittest.mock import patch, MagicMock, AsyncMock
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import aiohttp
+import pytest
 from rich.progress import Progress
+
 from carrus.core.downloader import download_file, verify_checksum
+
 
 @pytest.fixture
 def temp_file():

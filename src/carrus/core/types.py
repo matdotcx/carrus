@@ -1,11 +1,12 @@
 # src/carrus/core/types.py
 
-from enum import Enum
-from dataclasses import dataclass, field
 import shutil
-from typing import Optional, Dict, List, Any
-from pathlib import Path
+from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 
 class BuildType(Enum):
     """Types of builds we support."""
@@ -85,5 +86,3 @@ class BuildResult:
     def __post_init__(self):
         if self.errors is None:
             self.errors = []
-        if self.warnings is None:
-            self.warnings = []

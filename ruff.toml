@@ -13,6 +13,7 @@ select = [
 ignore = [
     "E501", # Line too long (temporarily)
     "S101", # Use of assert (allow in tests)
+    "S603", # Subprocess call - we validate inputs and use clean env
 ]
 [format]
 quote-style = "double"

@@ -1,18 +1,17 @@
-# src/carrus/core/codesign.py
+"""Code signing verification utilities."""
 
-import subprocess
-from pathlib import Path
-from typing import Optional, Dict, List, Tuple
-from dataclasses import dataclass
-import json
-from rich.console import Console
-import tempfile
 import os
+import shutil
+import subprocess
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+from rich.console import Console
+
 from .logging import get_audit_logger, get_debug_logger
 
-console = Console()
-audit_log = get_audit_logger()
-debug_log = get_debug_logger()
 
 @dataclass
 class SigningInfo:
@@ -29,6 +28,47 @@ class SigningInfo:
         if self.errors is None:
             self.errors = []
 
+HDIUTIL_PATH = shutil.which("hdiutil")
+if not HDIUTIL_PATH:
+    raise RuntimeError("hdiutil not found in PATH")
+
+ALLOWED_COMMANDS = {'codesign', 'spctl', HDIUTIL_PATH}
+
+console = Console()
+audit_log = get_audit_logger()
+debug_log = get_debug_logger()
+
+def _validate_command(cmd: List[str]) -> None:
+    """Validate command is safe to execute."""
+    if not isinstance(cmd, list) or not cmd:
+        raise RuntimeError("Invalid command format")
+        
+    if cmd[0] not in ALLOWED_COMMANDS:
+        raise RuntimeError("Invalid command")
+        
+    # Validate all arguments are strings
+    if not all(isinstance(arg, str) for arg in cmd):
+        raise RuntimeError("Invalid command arguments")
+
+def run_command(cmd: List[str], description: str) -> Tuple[str, str, int]:
+    """Run a command and return stdout, stderr, and return code."""
+    try:
+        _validate_command(cmd)
+        # Use clean environment
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env
+        )
+        return result.stdout, result.stderr, result.returncode
+    except subprocess.CalledProcessError as e:
+        return "", str(e), e.returncode
+    except Exception as e:
+        return "", str(e), -1
+
 class DMGMount:
     """Context manager for mounting DMG files."""
     def __init__(self, dmg_path: Path):
@@ -41,11 +81,16 @@ class DMGMount:
         self.mount_point = tempfile.mkdtemp()
 
         # Mount DMG
-        result = subprocess.run([
-            'hdiutil', 'attach', str(self.dmg_path),
+        cmd = [
+            HDIUTIL_PATH, 'attach', str(self.dmg_path),
             '-mountpoint', str(self.mount_point),
             '-nobrowse', '-quiet'
-        ], capture_output=True, text=True)
+        ]
+        
+        _validate_command(cmd)
+        # Use clean environment
+        env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
 
         if result.returncode != 0:
             raise RuntimeError(f"Failed to mount DMG: {result.stderr}")
@@ -53,7 +98,7 @@ class DMGMount:
         # Find the .app bundle
         app_paths = list(Path(self.mount_point).glob("*.app"))
         if not app_paths:
-            app_paths = list(Path(self.mount_point).rglob("*.app"))  # Search recursively
+            app_paths = list(Path(self.mount_point).rglob("*.app"))
 
         if app_paths:
             self.app_path = app_paths[0]
@@ -63,34 +108,21 @@ class DMGMount:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # Unmount DMG
+        """Clean up mounted DMG."""
         if self.mount_point:
-            subprocess.run(
-                ['hdiutil', 'detach', self.mount_point, '-force'],
-                capture_output=True
-            )
+            cmd = [HDIUTIL_PATH, 'detach', self.mount_point, '-force']
             try:
+                _validate_command(cmd)
+                # Use clean environment
+                env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
+                subprocess.run(cmd, capture_output=True, check=True, env=env)
                 os.rmdir(self.mount_point)
-            except OSError:
-                pass
-
-def run_command(cmd: List[str], description: str) -> Tuple[str, str, int]:
-    """Run a command and return stdout, stderr, and return code."""
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True
-        )
-        return result.stdout, result.stderr, result.returncode
-    except subprocess.CalledProcessError as e:
-        return "", str(e), e.returncode
-    except Exception as e:
-        return "", str(e), -1
+            except Exception as e:
+                # Log the error but don't raise since this is cleanup
+                debug_log.error(f"Error during DMG cleanup: {e}")
 
 def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
     """Verify code signing of a file."""
-    errors = []
     debug_output = []
 
     is_dmg = path.suffix.lower() == '.dmg'
@@ -100,7 +132,6 @@ def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
     if debug:
         debug_output.append(f"File type: {'DMG' if is_dmg else 'Other'}")
 
-    check_path = path
     if is_dmg:
         try:
             debug_log.info(f"Mounting DMG file: {path}")
@@ -195,53 +226,3 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
         errors=[],
         raw_output="\n".join(debug_output)
     )
-
-def verify_signature_requirements(
-    path: Path,
-    required_team_id: Optional[str] = None,
-    require_notarized: bool = True,
-    debug: bool = True
-) -> Tuple[bool, List[str]]:
-    """Verify signature matches requirements."""
-    debug_log.info(
-        f"Verifying signature requirements for {path} "
-        f"(team_id={required_team_id}, require_notarized={require_notarized})"
-    )
-
-    info = verify_codesign(path, debug=debug)
-    errors = info.errors.copy()
-
-    if debug:
-        console.print("\n[bold blue]Debug Information:[/bold blue]")
-        console.print(info.raw_output)
-
-    if not info.signed:
-        error_msg = "File is not signed"
-        debug_log.error(error_msg)
-        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
-        errors.append(error_msg)
-        return False, errors
-
-    if required_team_id and info.team_id != required_team_id:
-        error_msg = (
-            f"Team ID mismatch: found {info.team_id}, "
-            f"expected {required_team_id}"
-        )
-        debug_log.error(error_msg)
-        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
-        errors.append(error_msg)
-        return False, errors
-
-    if require_notarized and not info.notarized:
-        error_msg = "File is not notarized"
-        debug_log.error(error_msg)
-        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
-        errors.append(error_msg)
-        return False, errors
-
-    debug_log.info(f"Signature requirements verified successfully for {path}")
-    audit_log.info(
-        f"Signature verification passed for {path} "
-        f"(team_id={info.team_id}, notarized={info.notarized})"
-    )
-    return True, []

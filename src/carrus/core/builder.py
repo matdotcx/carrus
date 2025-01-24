@@ -1,18 +1,22 @@
 # src/carrus/core/builder.py
 
-import subprocess
-from pathlib import Path
-import tempfile
-import shutil
 import os
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime
-from typing import Optional, List, Tuple
+from pathlib import Path
+from typing import List, Tuple
+
 from rich.console import Console
 from rich.progress import Progress
-from .types import (
-    BuildType, BuildStep, BuildState, BuildConfig, 
-    BuildResult
-)
+
+from .types import BuildConfig, BuildResult, BuildState, BuildStep, BuildType
+
+HDIUTIL_PATH = shutil.which("hdiutil")
+if not HDIUTIL_PATH:
+    raise RuntimeError("hdiutil not found in PATH")
+
 
 console = Console()
 
@@ -28,6 +32,44 @@ class AppExtractionError(BuildError):
     """Error extracting application."""
     pass
 
+def _validate_cmd(cmd: List[str], executable: str) -> None:
+    """Validate a command is safe to execute."""
+    if not isinstance(cmd, list) or not cmd:
+        raise BuildError("Invalid command format")
+        
+    if cmd[0] != executable:
+        raise BuildError("Invalid command")
+        
+    if not all(isinstance(arg, str) for arg in cmd):
+        raise BuildError("Invalid command arguments")
+
+    exe_path = Path(executable)
+    if not (exe_path.is_file() and os.access(exe_path, os.X_OK)):
+        raise BuildError(f"{executable} is not an executable file")
+
+def _run_cmd(cmd: List[str], description: str) -> Tuple[str, str, int]:
+    """Run a command with validation and safe execution."""
+    console.print(f"[blue]{description}[/blue]")
+    
+    _validate_cmd(cmd, HDIUTIL_PATH)
+    
+    # Use secure PATH
+    env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
+
+    # Execute with validated inputs and cleaned environment    
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        check=True,
+        text=True,
+        env=env
+    )
+
+    if result.stdout:
+        console.print("[dim]Command output:[/dim]")
+        console.print(result.stdout)
+    return result.stdout, result.stderr, result.returncode
+
 class AppDmgBuilder:
     """Builds application packages from DMGs."""
 
@@ -40,7 +82,7 @@ class AppDmgBuilder:
         build_state: BuildState
     ) -> BuildResult:
         """Build package from DMG."""
-        console.print(f"\n[blue]Starting DMG build[/blue]")
+        console.print("\n[blue]Starting DMG build[/blue]")
         console.print(f"Source: {source_path}")
         console.print(f"Destination: {destination}")
 
@@ -107,15 +149,6 @@ class DMGMount:
         self.app_path = None
         self._mounted = False
 
-    def _run_command(self, cmd: List[str], description: str) -> Tuple[str, str, int]:
-        """Run a command and return stdout, stderr, and return code."""
-        console.print(f"[blue]{description}[/blue]")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.stdout:
-            console.print("[dim]Command output:[/dim]")
-            console.print(result.stdout)
-        return result.stdout, result.stderr, result.returncode
-
     def __enter__(self):
         try:
             self.build_state.current_step = BuildStep.MOUNTING
@@ -125,9 +158,9 @@ class DMGMount:
             console.print(f"Created mount point at {self.mount_point}")
 
             # Mount DMG
-            stdout, stderr, returncode = self._run_command(
+            stdout, stderr, returncode = _run_cmd(
                 [
-                    'hdiutil', 'attach',
+                    HDIUTIL_PATH, 'attach',
                     str(self.dmg_path),
                     '-mountpoint', str(self.mount_point),
                     '-nobrowse', '-quiet'
@@ -159,14 +192,14 @@ class DMGMount:
             self.cleanup()
             if isinstance(e, (DMGMountError, AppExtractionError)):
                 raise
-            raise BuildError(f"DMG mount failed: {str(e)}")
+            raise BuildError(f"DMG mount failed: {str(e)}") from e
 
     def cleanup(self):
         """Clean up mount point and mounted DMG."""
         if self._mounted:
             try:
-                self._run_command(
-                    ['hdiutil', 'detach', self.mount_point, '-force'],
+                _run_cmd(
+                    [HDIUTIL_PATH, 'detach', self.mount_point, '-force'],
                     "Unmounting DMG"
                 )
                 self._mounted = False
