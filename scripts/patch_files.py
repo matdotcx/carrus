@@ -27,13 +27,13 @@ TEAM_ID = typer.Option(None, help="Required Team ID")
 REQUIRE_NOTARIZED = typer.Option(True, help="Require notarization")
 DEBUG = typer.Option(False, "--debug", "-d", help="Show debug information")
 CATEGORY_FILTER = typer.Option(None, help="Limit to category")
-SEARCH_TERM = typer.Argument(..., help="Search term")"""
+SEARCH_TERM = typer.Argument(..., help="Search term")""",
         }
     },
     "src/carrus/core/builder.py": {
         "subprocess": {
             "old": "result = subprocess.run(cmd, capture_output=True, check=True, check=True, check=True, check=True, text=True)",
-            "new": "result = subprocess.run(cmd, capture_output=True, check=True, text=True)"
+            "new": "result = subprocess.run(cmd, capture_output=True, check=True, text=True)",
         }
     },
     "src/carrus/core/types.py": {
@@ -43,34 +43,36 @@ SEARCH_TERM = typer.Argument(..., help="Search term")"""
             self.""",
             "new": """def __post_init__(self):
         if self.errors is None:
-            self.errors = []"""
+            self.errors = []""",
         }
     },
 }
 
+
 def apply_patches():
     """Apply all patches to files."""
     root = Path(__file__).parent.parent
-    
+
     for file_path, patches in PATCHES.items():
         target = root / file_path
         if not target.exists():
             print(f"❌ File not found: {file_path}")
             continue
-            
+
         content = target.read_text()
         modified = False
-        
+
         for patch_name, patch in patches.items():
             if patch["old"] in content:
                 content = content.replace(patch["old"], patch["new"])
                 modified = True
                 print(f"✅ Applied {patch_name} patch to {file_path}")
-                
+
         if modified:
             target.write_text(content)
         else:
             print(f"⚠️ No patches applied to {file_path}")
+
 
 if __name__ == "__main__":
     apply_patches()

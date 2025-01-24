@@ -84,7 +84,7 @@ def download(
         asyncio.run(do_download())
 
     except Exception as e:
-                raise typer.Exit(1) from e
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -124,7 +124,7 @@ def verify(
                 console.print(f"  - {error}")
 
     except Exception as e:
-                raise typer.Exit(1) from e
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -141,7 +141,7 @@ def repo_add(path: Path = REPO_PATH, name: Optional[str] = REPO_NAME):
         console.print(f"Description: {metadata.description}")
         console.print(f"Maintainer: {metadata.maintainer}")
     except Exception as e:
-                raise typer.Exit(1) from e
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -155,7 +155,7 @@ def repo_list():
         table = repo_manager.list_manifests()
         console.print(table)
     except Exception as e:
-                raise typer.Exit(1) from e
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -184,7 +184,7 @@ def search(
 
         console.print(table)
     except Exception as e:
-                raise typer.Exit(1) from e
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -233,7 +233,7 @@ def check_updates(
                     console.print("[green]Package is up to date![/green]")
 
         except Exception as e:
-                        raise typer.Exit(1) from e
+            raise typer.Exit(1) from e
 
     asyncio.run(async_check())
 
@@ -287,7 +287,7 @@ def build(
                     raise typer.Exit(1)
 
         except Exception as e:
-                        raise typer.Exit(1) from e
+            raise typer.Exit(1) from e
 
     asyncio.run(async_build())
 
@@ -356,7 +356,7 @@ def build_mdm(
                 console.print(f"[green]Successfully created MDM package: {pkg_path}")
 
         except Exception as e:
-                        raise typer.Exit(1) from e
+            raise typer.Exit(1) from e
 
     asyncio.run(async_build())
 

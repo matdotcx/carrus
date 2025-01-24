@@ -19,9 +19,12 @@ from tests.command_runner import run_carrus
 console = Console()
 app = typer.Typer()
 
+
 class TestFailure(Exception):
     """Test failure with details."""
+
     pass
+
 
 class TestSuite:
     def __init__(self):
@@ -77,14 +80,8 @@ class TestSuite:
             "url": "https://download-installer.cdn.mozilla.net/pub/firefox/releases/123.0/mac/en-US/Firefox%20123.0.dmg",
             "filename": "Firefox-123.0.dmg",
             "checksum": "80321c06df972dcf7d346d1137ca0d31be8988fdcf892702da77a43f4bb8a8f1",
-            "code_sign": {
-                "team_id": "43AQ936H96",
-                "require_notarized": True
-            },
-            "build": {
-                "type": "app_dmg",
-                "destination": "/Applications"
-            },
+            "code_sign": {"team_id": "43AQ936H96", "require_notarized": True},
+            "build": {"type": "app_dmg", "destination": "/Applications"},
             "mdm": {
                 "kandji": {
                     "display_name": "Mozilla Firefox",
@@ -92,9 +89,9 @@ class TestSuite:
                     "category": "Browsers",
                     "developer": "Mozilla",
                     "minimum_os_version": "11.0",
-                    "uninstallable": True
+                    "uninstallable": True,
                 }
-            }
+            },
         }
 
         with open(self.test_repo / "manifests" / "browsers" / "firefox.yaml", "w") as f:
@@ -233,9 +230,7 @@ class TestSuite:
         ]
 
         with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
+            SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
         ) as progress:
             task = progress.add_task("Running tests...", total=None)
 
@@ -272,15 +267,16 @@ class TestSuite:
             for result in self.results:
                 f.write(f"Test: {result['name']}\n")
                 f.write(f"Result: {result['result']}\n")
-                if result.get('error'):
+                if result.get("error"):
                     f.write(f"Error: {result['error']}\n")
                 f.write("-" * 30 + "\n")
 
         console.print(f"\nTest report saved to: {report_file}")
 
+
 @app.command()
 def run_tests(
-    skip_cleanup: bool = typer.Option(False, "--skip-cleanup", help="Don't clean up test files")
+    skip_cleanup: bool = typer.Option(False, "--skip-cleanup", help="Don't clean up test files"),
 ):
     """Run all tests."""
     suite = TestSuite()
@@ -305,6 +301,7 @@ def run_tests(
 
         # Exit with appropriate code
         sys.exit(1 if suite.failed > 0 else 0)
+
 
 if __name__ == "__main__":
     app()

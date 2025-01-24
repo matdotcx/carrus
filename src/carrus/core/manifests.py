@@ -11,20 +11,25 @@ from .types import BuildConfig
 
 class CodeSignRequirements(BaseModel):
     """Code signing requirements for a package."""
+
     team_id: Optional[str] = None
     require_notarized: bool = True
     authorities: Optional[List[str]] = None
 
+
 class BuildOptions(BaseModel):
     """Build options for a package."""
+
     type: str
     destination: Optional[str] = "/Applications"
     preserve_temp: bool = False
     sign: Optional[Dict[str, str]] = None
     customize: Optional[List[Dict[str, Any]]] = None
 
+
 class KandjiOptions(BaseModel):
     """Kandji-specific MDM options."""
+
     display_name: Optional[str] = None
     description: Optional[str] = None
     category: str = "Applications"
@@ -34,12 +39,16 @@ class KandjiOptions(BaseModel):
     preinstall_script: Optional[str] = None
     postinstall_script: Optional[str] = None
 
+
 class MDMOptions(BaseModel):
     """MDM-specific options."""
+
     kandji: Optional[KandjiOptions] = None
+
 
 class Manifest(BaseModel):
     """Manifest definition."""
+
     name: str
     version: str
     type: str
@@ -67,7 +76,7 @@ class Manifest(BaseModel):
             destination=self.build.destination,
             preserve_temp=self.build.preserve_temp,
             sign=self.build.sign,
-            customize=self.build.customize
+            customize=self.build.customize,
         )
 
     def to_dict(self) -> Dict[str, Any]:

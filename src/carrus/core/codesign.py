@@ -16,6 +16,7 @@ from .logging import get_audit_logger, get_debug_logger
 @dataclass
 class SigningInfo:
     """Container for code signing information."""
+
     signed: bool
     team_id: Optional[str] = None
     authority: Optional[List[str]] = None
@@ -28,27 +29,30 @@ class SigningInfo:
         if self.errors is None:
             self.errors = []
 
+
 HDIUTIL_PATH = shutil.which("hdiutil")
 if not HDIUTIL_PATH:
     raise RuntimeError("hdiutil not found in PATH")
 
-ALLOWED_COMMANDS = {'codesign', 'spctl', HDIUTIL_PATH}
+ALLOWED_COMMANDS = {"codesign", "spctl", HDIUTIL_PATH}
 
 console = Console()
 audit_log = get_audit_logger()
 debug_log = get_debug_logger()
 
+
 def _validate_command(cmd: List[str]) -> None:
     """Validate command is safe to execute."""
     if not isinstance(cmd, list) or not cmd:
         raise RuntimeError("Invalid command format")
-        
+
     if cmd[0] not in ALLOWED_COMMANDS:
         raise RuntimeError("Invalid command")
-        
+
     # Validate all arguments are strings
     if not all(isinstance(arg, str) for arg in cmd):
         raise RuntimeError("Invalid command arguments")
+
 
 def run_command(cmd: List[str], description: str) -> Tuple[str, str, int]:
     """Run a command and return stdout, stderr, and return code."""
@@ -56,21 +60,17 @@ def run_command(cmd: List[str], description: str) -> Tuple[str, str, int]:
         _validate_command(cmd)
         # Use clean environment
         env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-            env=env
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
         return result.stdout, result.stderr, result.returncode
     except subprocess.CalledProcessError as e:
         return "", str(e), e.returncode
     except Exception as e:
         return "", str(e), -1
 
+
 class DMGMount:
     """Context manager for mounting DMG files."""
+
     def __init__(self, dmg_path: Path):
         self.dmg_path = dmg_path
         self.mount_point = None
@@ -82,11 +82,15 @@ class DMGMount:
 
         # Mount DMG
         cmd = [
-            HDIUTIL_PATH, 'attach', str(self.dmg_path),
-            '-mountpoint', str(self.mount_point),
-            '-nobrowse', '-quiet'
+            HDIUTIL_PATH,
+            "attach",
+            str(self.dmg_path),
+            "-mountpoint",
+            str(self.mount_point),
+            "-nobrowse",
+            "-quiet",
         ]
-        
+
         _validate_command(cmd)
         # Use clean environment
         env = {"PATH": "/usr/local/bin:/usr/bin:/bin"}
@@ -110,7 +114,7 @@ class DMGMount:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Clean up mounted DMG."""
         if self.mount_point:
-            cmd = [HDIUTIL_PATH, 'detach', self.mount_point, '-force']
+            cmd = [HDIUTIL_PATH, "detach", self.mount_point, "-force"]
             try:
                 _validate_command(cmd)
                 # Use clean environment
@@ -121,11 +125,12 @@ class DMGMount:
                 # Log the error but don't raise since this is cleanup
                 debug_log.error(f"Error during DMG cleanup: {e}")
 
+
 def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
     """Verify code signing of a file."""
     debug_output = []
 
-    is_dmg = path.suffix.lower() == '.dmg'
+    is_dmg = path.suffix.lower() == ".dmg"
     debug_log.info(f"Starting code sign verification for {path}")
     debug_log.debug(f"File type: {'DMG' if is_dmg else 'Other'}")
 
@@ -144,13 +149,10 @@ def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
             error_msg = f"Failed to process DMG: {str(e)}"
             debug_log.error(error_msg)
             audit_log.error(f"Code sign verification failed for DMG {path}: {error_msg}")
-            return SigningInfo(
-                signed=False,
-                errors=[error_msg],
-                raw_output="\n".join(debug_output)
-            )
+            return SigningInfo(signed=False, errors=[error_msg], raw_output="\n".join(debug_output))
     else:
         return verify_codesign_internal(path, debug, debug_output)
+
 
 def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -> SigningInfo:
     """Internal verification logic."""
@@ -159,8 +161,7 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
     # Basic codesign verification
     debug_log.debug("Running basic codesign verification")
     stdout, stderr, returncode = run_command(
-        ['codesign', '--verify', '--verbose=2', str(path)],
-        "codesign verify"
+        ["codesign", "--verify", "--verbose=2", str(path)], "codesign verify"
     )
     is_signed = returncode == 0
     debug_log.info(f"Basic verification result: {'signed' if is_signed else 'unsigned'}")
@@ -173,10 +174,7 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
 
     # Get detailed signing info
     debug_log.debug("Getting detailed signing information")
-    stdout, stderr, returncode = run_command(
-        ['codesign', '-dvv', str(path)],
-        "codesign details"
-    )
+    stdout, stderr, returncode = run_command(["codesign", "-dvv", str(path)], "codesign details")
 
     if debug:
         debug_output.append("\nCodesign details output:")
@@ -187,19 +185,18 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
     team_id = None
     authority = []
     for line in (stderr or "").splitlines():
-        if 'TeamIdentifier=' in line:
-            team_id = line.split('=')[1]
+        if "TeamIdentifier=" in line:
+            team_id = line.split("=")[1]
             debug_log.info(f"Found Team ID: {team_id}")
-        if 'Authority=' in line:
-            auth = line.split('=')[1]
+        if "Authority=" in line:
+            auth = line.split("=")[1]
             authority.append(auth)
             debug_log.debug(f"Found Authority: {auth}")
 
     # Check notarization
     debug_log.debug("Checking notarization status")
     stdout, stderr, returncode = run_command(
-        ['spctl', '--assess', '--verbose=2', '--type', 'execute', str(path)],
-        "notarization check"
+        ["spctl", "--assess", "--verbose=2", "--type", "execute", str(path)], "notarization check"
     )
     is_notarized = returncode == 0
     debug_log.info(f"Notarization check result: {'notarized' if is_notarized else 'not notarized'}")
@@ -224,5 +221,5 @@ def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -
         authority=authority,
         notarized=is_notarized,
         errors=[],
-        raw_output="\n".join(debug_output)
+        raw_output="\n".join(debug_output),
     )

@@ -7,7 +7,7 @@ FIXES = {
     "builder.py": {
         "subprocess": (
             "result = subprocess.run(cmd, capture_output=True, check=True, check=True, check=True, text=True)",
-            "result = subprocess.run(cmd, capture_output=True, check=True, text=True)"
+            "result = subprocess.run(cmd, capture_output=True, check=True, text=True)",
         ),
     },
     "types.py": {
@@ -17,7 +17,7 @@ FIXES = {
             self.""",
             """    def __post_init__(self):
         if self.errors is None:
-            self.errors = []"""
+            self.errors = []""",
         ),
     },
     "test_codesign.py": {
@@ -35,10 +35,11 @@ from carrus.core.codesign import (
     SigningInfo,
     verify_codesign,
     verify_signature_requirements,
-)"""
+)""",
         ),
     },
 }
+
 
 def fix_syntax_errors():
     """Apply quick syntax fixes."""

@@ -10,23 +10,28 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
 
+
 class DatabaseError(Exception):
     """Base exception for database errors."""
+
     pass
+
 
 class MigrationError(DatabaseError):
     """Raised when database migration fails."""
+
     pass
+
 
 class Database:
     """Core database management class."""
-    
+
     def __init__(self, db_path: Path):
         """Initialize database connection."""
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
-    
+
     @contextmanager
     def get_connection(self):
         """Get a database connection with automatic closing."""
@@ -49,22 +54,22 @@ class Database:
                         applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-                
+
                 cursor.execute("SELECT version FROM schema_version ORDER BY version DESC LIMIT 1")
                 result = cursor.fetchone()
                 current_version = result[0] if result else 0
 
                 if current_version < SCHEMA_VERSION:
                     self._apply_migrations(conn, current_version)
-                
+
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to initialize database: {e}") from e
+            raise DatabaseError(f"Failed to initialize database: {e}") from e
 
     def _apply_migrations(self, conn: sqlite3.Connection, current_version: int):
         """Apply necessary database migrations."""
         try:
             cursor = conn.cursor()
-            
+
             # Core tables
             if current_version < 1:
                 # Packages table
@@ -187,10 +192,7 @@ class Database:
                 """)
 
                 # Record schema version
-                cursor.execute(
-                    "INSERT INTO schema_version (version) VALUES (?)",
-                    (SCHEMA_VERSION,)
-                )
+                cursor.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
 
                 conn.commit()
 
@@ -199,20 +201,29 @@ class Database:
             logger.error(f"Migration failed: {e}")
             raise MigrationError(f"Failed to apply migrations: {e}") from e
 
-    def add_package(self, name: str, version: str, install_path: Optional[str] = None,
-                   checksum: Optional[str] = None, status: str = "not_installed") -> int:
+    def add_package(
+        self,
+        name: str,
+        version: str,
+        install_path: Optional[str] = None,
+        checksum: Optional[str] = None,
+        status: str = "not_installed",
+    ) -> int:
         """Add a new package to the database."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO packages (name, version, install_path, checksum, status)
                     VALUES (?, ?, ?, ?, ?)
-                    """, (name, version, install_path, checksum, status))
+                    """,
+                    (name, version, install_path, checksum, status),
+                )
                 conn.commit()
                 return cursor.lastrowid
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to add package: {e}") from e
+            raise DatabaseError(f"Failed to add package: {e}") from e
 
     def update_package_status(self, package_id: int, status: str):
         """Update package installation status."""
@@ -222,44 +233,59 @@ class Database:
                 cursor.execute("SELECT id FROM packages WHERE id = ?", (package_id,))
                 if not cursor.fetchone():
                     raise DatabaseError(f"Package with ID {package_id} not found")
-                
-                cursor.execute("""
+
+                cursor.execute(
+                    """
                     UPDATE packages 
                     SET status = ? 
                     WHERE id = ?
-                    """, (status, package_id))
+                    """,
+                    (status, package_id),
+                )
                 conn.commit()
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to update package status: {e}") from e
+            raise DatabaseError(f"Failed to update package status: {e}") from e
 
-    def add_install_history(self, package_id: int, version: str, action: str,
-                          status: str, error_message: Optional[str] = None):
+    def add_install_history(
+        self,
+        package_id: int,
+        version: str,
+        action: str,
+        status: str,
+        error_message: Optional[str] = None,
+    ):
         """Record package installation history."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO install_history 
                     (package_id, version, action, status, error_message)
                     VALUES (?, ?, ?, ?, ?)
-                    """, (package_id, version, action, status, error_message))
+                    """,
+                    (package_id, version, action, status, error_message),
+                )
                 conn.commit()
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to add install history: {e}") from e
+            raise DatabaseError(f"Failed to add install history: {e}") from e
 
     def get_package_history(self, package_id: int) -> List[Dict[str, Any]]:
         """Get installation history for a package."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT * FROM install_history
                     WHERE package_id = ?
                     ORDER BY id DESC
-                    """, (package_id,))
+                    """,
+                    (package_id,),
+                )
                 return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to get package history: {e}") from e
+            raise DatabaseError(f"Failed to get package history: {e}") from e
 
     def backup_database(self, backup_path: Path):
         """Create a backup of the database."""
@@ -269,17 +295,17 @@ class Database:
                 conn.backup(backup_conn)
                 backup_conn.close()
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to create database backup: {e}") from e
+            raise DatabaseError(f"Failed to create database backup: {e}") from e
 
     def restore_database(self, backup_path: Path):
         """Restore database from backup."""
         if not backup_path.exists():
             raise DatabaseError(f"Backup file not found: {backup_path}")
-        
+
         try:
             with self.get_connection() as conn:
                 backup_conn = sqlite3.connect(backup_path)
                 backup_conn.backup(conn)
                 backup_conn.close()
         except sqlite3.Error as e:
-                        raise DatabaseError(f"Failed to restore database: {e}") from e
+            raise DatabaseError(f"Failed to restore database: {e}") from e

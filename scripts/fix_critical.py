@@ -7,7 +7,7 @@ FIXES = {
     "src/carrus/core/builder.py": {
         "incomplete_validation": {
             "old": "        validation_",
-            "new": "        validation_errors = []"
+            "new": "        validation_errors = []",
         }
     },
     "src/carrus/core/types.py": {
@@ -19,7 +19,7 @@ FIXES = {
         if self.errors is None:
             self.errors = []
         if self.warnings is None:
-            self.warnings = []"""
+            self.warnings = []""",
         }
     },
     "src/carrus/core/codesign.py": {
@@ -31,22 +31,23 @@ FIXES = {
         if self.errors is None:
             self.errors = []
         if self.warnings is None:
-            self.warnings = []"""
+            self.warnings = []""",
         }
     },
     "src/carrus/cli.py": {
         "error_chaining": {
             "old": "raise typer.Exit(1) from e from e",
-            "new": "raise typer.Exit(1) from e"
+            "new": "raise typer.Exit(1) from e",
         }
     },
     "src/carrus/core/database.py": {
         "error_chaining": {
-            "old": "raise DatabaseError(f\"Failed to initialize database: {e}\") from e from e",
-            "new": "raise DatabaseError(f\"Failed to initialize database: {e}\") from e"
+            "old": 'raise DatabaseError(f"Failed to initialize database: {e}") from e from e',
+            "new": 'raise DatabaseError(f"Failed to initialize database: {e}") from e',
         }
-    }
+    },
 }
+
 
 def fix_critical_errors():
     """Apply critical syntax fixes."""

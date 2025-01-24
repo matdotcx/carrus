@@ -13,11 +13,13 @@ from rich.table import Table
 @dataclass
 class RepoMetadata:
     """Repository metadata."""
+
     name: str
     description: str
     maintainer: str
     url: Optional[str] = None
     branch: Optional[str] = None
+
 
 class RepositoryManager:
     """Manages manifest repositories."""
@@ -65,11 +67,11 @@ class RepositoryManager:
         with open(repo_yaml) as f:
             repo_data = yaml.safe_load(f)
             metadata = RepoMetadata(
-                name=name or repo_data.get('name'),
-                description=repo_data.get('description', ''),
-                maintainer=repo_data.get('maintainer', ''),
-                url=repo_data.get('url'),
-                branch=repo_data.get('branch')
+                name=name or repo_data.get("name"),
+                description=repo_data.get("description", ""),
+                maintainer=repo_data.get("maintainer", ""),
+                url=repo_data.get("url"),
+                branch=repo_data.get("branch"),
             )
 
         # Check for manifests directory
@@ -81,7 +83,7 @@ class RepositoryManager:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO repositories (name, path, url, metadata) VALUES (?, ?, ?, ?)",
-                (metadata.name, str(path), metadata.url, json.dumps(repo_data))
+                (metadata.name, str(path), metadata.url, json.dumps(repo_data)),
             )
 
             # Index manifests
@@ -95,7 +97,7 @@ class RepositoryManager:
 
                 conn.execute(
                     "INSERT OR REPLACE INTO manifests (name, repo_name, category, path) VALUES (?, ?, ?, ?)",
-                    (manifest_path.stem, metadata.name, category, str(manifest_path))
+                    (manifest_path.stem, metadata.name, category, str(manifest_path)),
                 )
 
         return metadata
@@ -129,13 +131,8 @@ class RepositoryManager:
             query += " ORDER BY manifests.category, manifests.name"
 
             for row in conn.execute(query, params):
-                metadata = json.loads(row[3] or '{}')
-                table.add_row(
-                    row[0],
-                    row[1],
-                    row[2],
-                    metadata.get('description', '')
-                )
+                metadata = json.loads(row[3] or "{}")
+                table.add_row(row[0], row[1], row[2], metadata.get("description", ""))
 
         return table
 
@@ -166,12 +163,14 @@ class RepositoryManager:
             query += " ORDER BY manifests.category, manifests.name"
 
             for row in conn.execute(query, params):
-                metadata = json.loads(row[3] or '{}')
-                results.append({
-                    'name': row[0],
-                    'category': row[1],
-                    'repo_name': row[2],
-                    'description': metadata.get('description', '')
-                })
+                metadata = json.loads(row[3] or "{}")
+                results.append(
+                    {
+                        "name": row[0],
+                        "category": row[1],
+                        "repo_name": row[2],
+                        "description": metadata.get("description", ""),
+                    }
+                )
 
         return results

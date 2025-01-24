@@ -7,31 +7,25 @@ from pathlib import Path
 from typing import Optional
 
 # Constants
-AUDIT_LOGGER = 'carrus.audit'
-DEBUG_LOGGER = 'carrus.debug'
+AUDIT_LOGGER = "carrus.audit"
+DEBUG_LOGGER = "carrus.debug"
 
-def setup_logging(
-    log_dir: Optional[Path] = None,
-    debug: bool = False
-) -> None:
+
+def setup_logging(log_dir: Optional[Path] = None, debug: bool = False) -> None:
     """Configure logging for carrus.
-    
+
     Args:
         log_dir: Directory to store log files. If None, logs to stderr only.
         debug: Whether to enable debug logging.
     """
     # Create formatters
-    audit_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - [AUDIT] %(message)s'
-    )
-    debug_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-    )
+    audit_formatter = logging.Formatter("%(asctime)s - %(levelname)s - [AUDIT] %(message)s")
+    debug_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 
     # Setup audit logger
     audit_logger = logging.getLogger(AUDIT_LOGGER)
     audit_logger.setLevel(logging.INFO)
-    
+
     # Setup debug logger
     debug_logger = logging.getLogger(DEBUG_LOGGER)
     debug_logger.setLevel(logging.DEBUG if debug else logging.INFO)
@@ -58,9 +52,11 @@ def setup_logging(
             debug_handler.setFormatter(debug_formatter)
             debug_logger.addHandler(debug_handler)
 
+
 def get_audit_logger() -> logging.Logger:
     """Get the audit logger."""
     return logging.getLogger(AUDIT_LOGGER)
+
 
 def get_debug_logger() -> logging.Logger:
     """Get the debug logger."""

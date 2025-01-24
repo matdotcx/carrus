@@ -12,10 +12,7 @@ def fix_files():
     test_codesign = root / "tests" / "test_codesign.py"
     if test_codesign.exists():
         content = test_codesign.read_text()
-        content = content.replace(
-            "mount/TestApp.app')",
-            "TestApp.app"
-        )
+        content = content.replace("mount/TestApp.app')", "TestApp.app")
         test_codesign.write_text(content)
 
     # Fix DatabaseError not being imported
@@ -25,7 +22,7 @@ def fix_files():
         if "from typing import Any, List, Optional" in content:
             content = content.replace(
                 "from typing import Any, List, Optional",
-                "from typing import Any, Dict, List, Optional"
+                "from typing import Any, Dict, List, Optional",
             )
         database.write_text(content)
 

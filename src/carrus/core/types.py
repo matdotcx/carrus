@@ -10,14 +10,17 @@ from typing import Any, Dict, List, Optional
 
 class BuildType(Enum):
     """Types of builds we support."""
-    APP_DMG = "app_dmg"      # Application in DMG format
-    APP_PKG = "app_pkg"      # Application in PKG format
-    APP_ZIP = "app_zip"      # Application in ZIP format
-    PKG = "pkg"             # Generic PKG
-    MANUAL = "manual"       # Custom build steps
+
+    APP_DMG = "app_dmg"  # Application in DMG format
+    APP_PKG = "app_pkg"  # Application in PKG format
+    APP_ZIP = "app_zip"  # Application in ZIP format
+    PKG = "pkg"  # Generic PKG
+    MANUAL = "manual"  # Custom build steps
+
 
 class BuildStep(Enum):
     """Steps in the build process."""
+
     INIT = "initialization"
     VALIDATION = "validation"
     MOUNTING = "mounting"
@@ -27,18 +30,22 @@ class BuildStep(Enum):
     PACKAGING = "packaging"
     CLEANUP = "cleanup"
 
+
 @dataclass
 class BuildConfig:
     """Build configuration."""
+
     type: str
     destination: str = "/Applications"
     preserve_temp: bool = False
     sign: Optional[Dict[str, str]] = None
     customize: Optional[List[Dict[str, Any]]] = None
 
+
 @dataclass
 class BuildState:
     """Tracks the state of a build operation."""
+
     started_at: datetime
     build_type: str
     source_path: Path
@@ -55,7 +62,7 @@ class BuildState:
     def add_error(self, error: str):
         """Add an error message."""
         self.errors.append(error)
-        
+
     def add_warning(self, warning: str):
         """Add a warning message."""
         self.warnings.append(warning)
@@ -73,9 +80,11 @@ class BuildState:
                 cleanup_errors.append(f"Failed to clean up {path}: {e}")
         return cleanup_errors
 
+
 @dataclass
 class BuildResult:
     """Result of a build operation."""
+
     success: bool
     output_path: Optional[Path] = None
     temp_dir: Optional[Path] = None
