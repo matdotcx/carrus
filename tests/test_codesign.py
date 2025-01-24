@@ -58,14 +58,15 @@ def test_dmg_mount_context_manager(mock_dmg):
             assert mount.app_path == mock_app
 
             # Verify mount command
-            mount_call = mock_run.call_args_list[0]
-            assert "hdiutil" in Path(mount_call[0][0]).name  # Check executable name
-            assert "attach" in mount_call[0][1]  # Check command argument
+            mount_call = mock_run.call_args_list[0][0][0]  # Get command list
+            assert "hdiutil" in Path(mount_call[0]).name  # Check executable name
+            assert mount_call[1] == "attach"  # Verify command is attach
 
         # Verify unmount command
-        unmount_call = mock_run.call_args_list[-1]
-        assert "hdiutil" in unmount_call[0][0]
-        assert "detach" in unmount_call[0][0]
+        unmount_call = mock_run.call_args_list[-1][0][0]  # Get command list
+            # Check executable name
+            assert "hdiutil" in Path(unmount_call[0]).name
+            assert unmount_call[1] == "detach"  # Verify command is detach
 
 
 @patch("carrus.core.codesign.run_command")
