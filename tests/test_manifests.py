@@ -1,15 +1,17 @@
 """Tests for recipe manifest handling."""
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open, patch
+
 import pytest
 
 from carrus.core.manifests import (
+    Recipe,  # Assuming dataclass
+    construct_url,
     load_manifest,
     parse_version,
-    construct_url,
-    Recipe,  # Assuming dataclass
 )
+
 
 @pytest.fixture
 def mock_recipe_file():

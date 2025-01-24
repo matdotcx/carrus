@@ -1,14 +1,17 @@
 """Tests for repository management."""
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 import pytest
 
 from carrus.core.repository import (
     clone_repository,
-    sync_repository,
     load_recipes,
+    resolve_inheritance,
+    sync_repository,
 )
+
 
 @pytest.fixture
 def mock_repo_dir():

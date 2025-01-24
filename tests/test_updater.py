@@ -1,7 +1,8 @@
 """Tests for update checking."""
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from carrus.core.updater import (
@@ -9,6 +10,7 @@ from carrus.core.updater import (
     compare_versions,
     notify_updates,
 )
+
 
 @pytest.fixture
 def mock_download_dir():

@@ -1,15 +1,17 @@
 """Tests for configuration handling."""
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open, patch
+
 import pytest
 
 from carrus.core.config import (
+    Config,  # Assuming dataclass
+    get_default_config,
     load_config,
     save_config,
-    get_default_config,
-    Config,  # Assuming dataclass
 )
+
 
 @pytest.fixture
 def mock_config_file():

@@ -2,13 +2,15 @@
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+
 import pytest
 
 from carrus.core.builder import (
     build_package,
-    inject_scripts,
     create_dmg,
+    inject_scripts,
 )
+
 
 @pytest.fixture
 def mock_build_dir():
@@ -54,5 +56,5 @@ def test_failed_build(mock_build_dir, mock_app):
     """Test handling build failures."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value.returncode = 1
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError, match="Package build failed"):
             build_package(mock_app, mock_build_dir)
