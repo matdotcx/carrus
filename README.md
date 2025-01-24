@@ -1,3 +1,6 @@
+
+[![CI](https://github.com/matdotcx/carrus/actions/workflows/ci.yml/badge.svg)](https://github.com/matdotcx/carrus/actions/workflows/ci.yml)
+
 # README.md
 # Carrus 🛺 
 
