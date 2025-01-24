@@ -229,7 +229,7 @@ def verify_signature_requirements(
     path: Path,
     required_team_id: Optional[str] = None,
     require_notarized: bool = True,
-    debug: bool = True
+    debug: bool = True,
 ) -> Tuple[bool, List[str]]:
     """Verify signature matches requirements."""
     debug_log.info(
@@ -252,10 +252,7 @@ def verify_signature_requirements(
         return False, errors
 
     if required_team_id and info.team_id != required_team_id:
-        error_msg = (
-            f"Team ID mismatch: found {info.team_id}, "
-            f"expected {required_team_id}"
-        )
+        error_msg = f"Team ID mismatch: found {info.team_id}, expected {required_team_id}"
         debug_log.error(error_msg)
         audit_log.error(f"Signature verification failed for {path}: {error_msg}")
         errors.append(error_msg)
