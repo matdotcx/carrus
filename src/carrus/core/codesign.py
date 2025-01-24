@@ -154,8 +154,56 @@ def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
         return verify_codesign_internal(path, debug, debug_output)
 
 
-def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -> SigningInfo:
-    """Internal verification logic."""
+def verify_signature_requirements(
+    path: Path,
+    required_team_id: Optional[str] = None,
+    require_notarized: bool = True,
+    debug: bool = True
+) -> Tuple[bool, List[str]]:
+    """Verify signature matches requirements."""
+    debug_log.info(
+        f"Verifying signature requirements for {path} "
+        f"(team_id={required_team_id}, require_notarized={require_notarized})"
+    )
+
+    info = verify_codesign(path, debug=debug)
+    errors = info.errors.copy()
+
+    if debug:
+        console.print("\n[bold blue]Debug Information:[/bold blue]")
+        console.print(info.raw_output)
+
+    if not info.signed:
+        error_msg = "File is not signed"
+        debug_log.error(error_msg)
+        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
+        errors.append(error_msg)
+        return False, errors
+
+    if required_team_id and info.team_id != required_team_id:
+        error_msg = (
+            f"Team ID mismatch: found {info.team_id}, "
+            f"expected {required_team_id}"
+        )
+        debug_log.error(error_msg)
+        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
+        errors.append(error_msg)
+        return False, errors
+
+    if require_notarized and not info.notarized:
+        error_msg = "File is not notarized"
+        debug_log.error(error_msg)
+        audit_log.error(f"Signature verification failed for {path}: {error_msg}")
+        errors.append(error_msg)
+        return False, errors
+
+    debug_log.info(f"Signature requirements verified successfully for {path}")
+    audit_log.info(
+        f"Signature verification passed for {path} "
+        f"(team_id={info.team_id}, notarized={info.notarized})"
+    )
+    return True, []
+
     debug_log.info(f"Starting internal code sign verification for {path}")
 
     # Basic codesign verification
