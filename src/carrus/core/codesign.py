@@ -126,6 +126,10 @@ class DMGMount:
                 debug_log.error(f"Error during DMG cleanup: {e}")
 
 
+def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -> SigningInfo:
+    """Internal implementation of code sign verification."""
+
+
 def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
     """Verify code signing of a file."""
     debug_output = []
