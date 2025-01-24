@@ -1,18 +1,15 @@
 name: CI
-
 on:
   push:
     branches: [ "main", "gold" ]
   pull_request:
     branches: [ "main", "gold" ]
-
 jobs:
   test:
     runs-on: macos-latest  # Since this is a macOS package manager
     strategy:
       matrix:
         python-version: ["3.11", "3.12"]
-
     steps:
     - uses: actions/checkout@v4
     
@@ -35,7 +32,6 @@ jobs:
     - name: Run tests
       run: |
         python -m pytest tests/ -v
-
   build:
     needs: test
     runs-on: macos-latest
@@ -58,7 +54,7 @@ jobs:
         hatch build
         
     - name: Upload dist artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist
         path: dist/
