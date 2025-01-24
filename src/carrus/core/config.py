@@ -10,6 +10,7 @@ import yaml
 @dataclass
 class Config:
     """Configuration data class for carrus."""
+
     db_path: str
     log_dir: str
     repo_url: Optional[str] = None
@@ -42,19 +43,15 @@ def get_default_config() -> Config:
     db_path = os.environ.get("CARRUS_DB_PATH", str(get_config_dir() / "carrus.db"))
     log_dir = os.environ.get("CARRUS_LOG_DIR", str(get_config_dir() / "logs"))
     repo_url = os.environ.get("CARRUS_REPO_URL")
-    
-    return Config(
-        db_path=db_path,
-        log_dir=log_dir,
-        repo_url=repo_url
-    )
+
+    return Config(db_path=db_path, log_dir=log_dir, repo_url=repo_url)
 
 
 def load_config(config_path: Path) -> Config:
     """Load configuration from YAML file."""
     with open(config_path, "r") as f:
         config_data = yaml.safe_load(f)
-    
+
     return Config(**config_data)
 
 
@@ -63,8 +60,8 @@ def save_config(config: Config, config_path: Path) -> None:
     config_dict = {
         "db_path": config.db_path,
         "log_dir": config.log_dir,
-        "repo_url": config.repo_url
+        "repo_url": config.repo_url,
     }
-    
+
     with open(config_path, "w") as f:
         yaml.dump(config_dict, f)
