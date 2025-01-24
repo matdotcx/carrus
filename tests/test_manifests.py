@@ -1,4 +1,5 @@
 """Tests for recipe manifest handling."""
+
 import tempfile
 from pathlib import Path
 from unittest.mock import mock_open, patch
@@ -6,11 +7,9 @@ from unittest.mock import mock_open, patch
 import pytest
 
 from carrus.core.manifests import (
-    Manifest,
-    CodeSignRequirements,
     BuildOptions,
     KandjiOptions,
-    MDMOptions,
+    Manifest,
 )
 
 
@@ -44,7 +43,7 @@ def test_build_options():
     build_opts = BuildOptions(
         type="pkg",
         destination="/Applications",
-        customize=[{"action": "set_ownership", "user": "root", "group": "wheel"}]
+        customize=[{"action": "set_ownership", "user": "root", "group": "wheel"}],
     )
     assert build_opts.type == "pkg"
     assert build_opts.destination == "/Applications"
@@ -54,9 +53,7 @@ def test_build_options():
 def test_kandji_options():
     """Test Kandji MDM options."""
     kandji_opts = KandjiOptions(
-        display_name="Firefox Browser",
-        category="Web Browsers",
-        minimum_os_version="12.0"
+        display_name="Firefox Browser", category="Web Browsers", minimum_os_version="12.0"
     )
     assert kandji_opts.display_name == "Firefox Browser"
     assert kandji_opts.category == "Web Browsers"
@@ -70,10 +67,7 @@ def test_manifest_build_config():
         version="115.0",
         type="app",
         url="https://example.com/firefox.dmg",
-        build=BuildOptions(
-            type="pkg",
-            destination="/Applications"
-        )
+        build=BuildOptions(type="pkg", destination="/Applications"),
     )
     build_config = manifest.get_build_config()
     assert build_config is not None

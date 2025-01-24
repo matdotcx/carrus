@@ -1,12 +1,13 @@
 """Tests for repository management."""
+
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from carrus.core.manifests import Manifest
 from carrus.core.config import get_repo_dir
+from carrus.core.manifests import Manifest
 
 
 @pytest.fixture
@@ -20,7 +21,7 @@ def test_repo_structure(mock_repo_dir):
     """Test repository directory structure."""
     manifests_dir = mock_repo_dir / "manifests"
     manifests_dir.mkdir(parents=True)
-    
+
     # Create mock recipe files
     (manifests_dir / "browsers").mkdir()
     (manifests_dir / "browsers/firefox.yaml").touch()
@@ -35,14 +36,14 @@ def test_manifest_loading(mock_repo_dir):
     """Test loading manifests from repository."""
     manifests_dir = mock_repo_dir / "manifests"
     manifests_dir.mkdir(parents=True)
-    
+
     manifest_data = """
     name: Firefox
     version: "115.0"
     type: "app"
     url: "https://download.mozilla.org/?product=firefox-{version}"
     """
-    
+
     firefox_yaml = manifests_dir / "firefox.yaml"
     firefox_yaml.write_text(manifest_data)
 
