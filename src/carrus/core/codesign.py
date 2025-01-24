@@ -128,6 +128,73 @@ class DMGMount:
 
 def verify_codesign_internal(path: Path, debug: bool, debug_output: List[str]) -> SigningInfo:
     """Internal implementation of code sign verification."""
+    debug_log.info(f"Starting internal code sign verification for {path}")
+
+    # Basic codesign verification
+    debug_log.debug("Running basic codesign verification")
+    stdout, stderr, returncode = run_command(
+        ["codesign", "--verify", "--verbose=2", str(path)], "codesign verify"
+    )
+    is_signed = returncode == 0
+    debug_log.info(f"Basic verification result: {'signed' if is_signed else 'unsigned'}")
+
+    if debug:
+        debug_output.append("\nCodesign verify output:")
+        debug_output.append(f"stdout: {stdout}")
+        debug_output.append(f"stderr: {stderr}")
+        debug_output.append(f"return code: {returncode}")
+
+    # Get detailed signing info
+    debug_log.debug("Getting detailed signing information")
+    stdout, stderr, returncode = run_command(["codesign", "-dvv", str(path)], "codesign details")
+
+    if debug:
+        debug_output.append("\nCodesign details output:")
+        debug_output.append(f"stdout: {stdout}")
+        debug_output.append(f"stderr: {stderr}")
+
+    # Parse team ID and authority
+    team_id = None
+    authority = []
+    for line in (stderr or "").splitlines():
+        if "TeamIdentifier=" in line:
+            team_id = line.split("=")[1]
+            debug_log.info(f"Found Team ID: {team_id}")
+        if "Authority=" in line:
+            auth = line.split("=")[1]
+            authority.append(auth)
+            debug_log.debug(f"Found Authority: {auth}")
+
+    # Check notarization
+    debug_log.debug("Checking notarization status")
+    stdout, stderr, returncode = run_command(
+        ["spctl", "--assess", "--verbose=2", "--type", "execute", str(path)], "notarization check"
+    )
+    is_notarized = returncode == 0
+    debug_log.info(f"Notarization check result: {'notarized' if is_notarized else 'not notarized'}")
+
+    if debug:
+        debug_output.append("\nNotarization check output:")
+        debug_output.append(f"stdout: {stdout}")
+        debug_output.append(f"stderr: {stderr}")
+        debug_output.append(f"return code: {returncode}")
+
+    # Log verification summary
+    audit_log.info(
+        f"Code sign verification completed for {path}: "
+        f"signed={is_signed}, "
+        f"team_id={team_id}, "
+        f"notarized={is_notarized}"
+    )
+
+    return SigningInfo(
+        signed=is_signed,
+        team_id=team_id,
+        authority=authority,
+        notarized=is_notarized,
+        errors=[],
+        raw_output="\n".join(debug_output),
+    )
 
 
 def verify_codesign(path: Path, debug: bool = True) -> SigningInfo:
@@ -207,71 +274,3 @@ def verify_signature_requirements(
         f"(team_id={info.team_id}, notarized={info.notarized})"
     )
     return True, []
-
-    debug_log.info(f"Starting internal code sign verification for {path}")
-
-    # Basic codesign verification
-    debug_log.debug("Running basic codesign verification")
-    stdout, stderr, returncode = run_command(
-        ["codesign", "--verify", "--verbose=2", str(path)], "codesign verify"
-    )
-    is_signed = returncode == 0
-    debug_log.info(f"Basic verification result: {'signed' if is_signed else 'unsigned'}")
-
-    if debug:
-        debug_output.append("\nCodesign verify output:")
-        debug_output.append(f"stdout: {stdout}")
-        debug_output.append(f"stderr: {stderr}")
-        debug_output.append(f"return code: {returncode}")
-
-    # Get detailed signing info
-    debug_log.debug("Getting detailed signing information")
-    stdout, stderr, returncode = run_command(["codesign", "-dvv", str(path)], "codesign details")
-
-    if debug:
-        debug_output.append("\nCodesign details output:")
-        debug_output.append(f"stdout: {stdout}")
-        debug_output.append(f"stderr: {stderr}")
-
-    # Parse team ID and authority
-    team_id = None
-    authority = []
-    for line in (stderr or "").splitlines():
-        if "TeamIdentifier=" in line:
-            team_id = line.split("=")[1]
-            debug_log.info(f"Found Team ID: {team_id}")
-        if "Authority=" in line:
-            auth = line.split("=")[1]
-            authority.append(auth)
-            debug_log.debug(f"Found Authority: {auth}")
-
-    # Check notarization
-    debug_log.debug("Checking notarization status")
-    stdout, stderr, returncode = run_command(
-        ["spctl", "--assess", "--verbose=2", "--type", "execute", str(path)], "notarization check"
-    )
-    is_notarized = returncode == 0
-    debug_log.info(f"Notarization check result: {'notarized' if is_notarized else 'not notarized'}")
-
-    if debug:
-        debug_output.append("\nNotarization check output:")
-        debug_output.append(f"stdout: {stdout}")
-        debug_output.append(f"stderr: {stderr}")
-        debug_output.append(f"return code: {returncode}")
-
-    # Log verification summary
-    audit_log.info(
-        f"Code sign verification completed for {path}: "
-        f"signed={is_signed}, "
-        f"team_id={team_id}, "
-        f"notarized={is_notarized}"
-    )
-
-    return SigningInfo(
-        signed=is_signed,
-        team_id=team_id,
-        authority=authority,
-        notarized=is_notarized,
-        errors=[],
-        raw_output="\n".join(debug_output),
-    )
