@@ -64,9 +64,9 @@ def test_dmg_mount_context_manager(mock_dmg):
 
         # Verify unmount command
         unmount_call = mock_run.call_args_list[-1][0][0]  # Get command list
-            # Check executable name
-            assert "hdiutil" in Path(unmount_call[0]).name
-            assert unmount_call[1] == "detach"  # Verify command is detach
+        # Check executable name
+        assert "hdiutil" in Path(unmount_call[0]).name
+        assert unmount_call[1] == "detach"  # Verify command is detach
 
 
 @patch("carrus.core.codesign.run_command")
