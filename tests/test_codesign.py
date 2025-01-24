@@ -59,8 +59,8 @@ def test_dmg_mount_context_manager(mock_dmg):
 
             # Verify mount command
             mount_call = mock_run.call_args_list[0]
-            assert "hdiutil" in mount_call[0][0]
-            assert "attach" in mount_call[0][0]
+            assert "hdiutil" in Path(mount_call[0][0]).name  # Check executable name
+            assert "attach" in mount_call[0][1]  # Check command argument
 
         # Verify unmount command
         unmount_call = mock_run.call_args_list[-1]
