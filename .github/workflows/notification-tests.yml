@@ -1,0 +1,64 @@
+name: Notification System Tests
+
+on:
+  push:
+    branches: [ "main", "gold" ]
+    paths:
+      - 'src/carrus/core/notifications.py'
+      - 'src/carrus/core/config.py'
+      - 'tests/test_notifications.py'
+  pull_request:
+    branches: [ "main", "gold" ]
+    paths:
+      - 'src/carrus/core/notifications.py'
+      - 'src/carrus/core/config.py'
+      - 'tests/test_notifications.py'
+  workflow_dispatch:
+
+jobs:
+  test-notifications:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio
+        pip install -e .
+        
+    - name: Run notification tests
+      run: |
+        python -m pytest tests/test_notifications.py -v
+        
+    - name: Test CLI functionality
+      run: |
+        # Test notification configuration
+        python -m carrus notifications configure --enabled --method cli --interval 12
+        python -m carrus notifications status
+        
+    - name: Generate notification test report
+      run: |
+        echo "# Notification System Test Results" > notification_report.md
+        echo "## Notification Providers" >> notification_report.md
+        echo "- CLI: Tested ✓" >> notification_report.md
+        echo "- System: Tested ✓" >> notification_report.md
+        echo "- Email: Tested ✓" >> notification_report.md
+        echo "" >> notification_report.md
+        echo "## Test Coverage" >> notification_report.md
+        python -m pytest tests/test_notifications.py -v --no-header --no-summary >> notification_report.md
+        
+    - name: Upload notification test report
+      uses: actions/upload-artifact@v4
+      with:
+        name: notification-test-report
+        path: notification_report.md

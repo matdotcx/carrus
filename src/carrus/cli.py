@@ -1,6 +1,7 @@
 # src/carrus/cli.py
 
 import asyncio
+import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +10,7 @@ import yaml
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+from typing_extensions import Annotated
 
 # CLI argument/option definitions
 MANIFEST_PATH = typer.Argument(..., help="Path to the manifest file")
@@ -22,6 +24,16 @@ REQUIRE_NOTARIZED = typer.Option(True, help="Require notarization")
 DEBUG = typer.Option(False, "--debug", "-d", help="Show debug information")
 CATEGORY_FILTER = typer.Option(None, help="Limit to category")
 SEARCH_TERM = typer.Argument(..., help="Search term")
+
+# Notification options
+NOTIFICATION_ENABLED = typer.Option(
+    True, "--enabled/--disabled", help="Enable or disable notifications"
+)
+NOTIFICATION_METHOD = typer.Option(
+    "cli", "--method", "-m", help="Notification method: cli, system, or email"
+)
+NOTIFICATION_EMAIL = typer.Option(None, "--email", "-e", help="Email address for notifications")
+NOTIFICATION_INTERVAL = typer.Option(24, "--interval", "-i", help="Check interval in hours")
 
 app = typer.Typer(name="carrus", help="Modern macOS package manager")
 console = Console()
@@ -191,13 +203,30 @@ def search(
 def check_updates(
     manifest_path: Path = MANIFEST_PATH,
     build_if_needed: bool = BUILD_IF_NEEDED,
+    notify: bool = typer.Option(
+        False, "--notify", "-n", help="Send notification if update available"
+    ),
 ):
     """Check for updates to a package."""
 
     async def async_check():
         try:
+            from .core.config import get_config_dir, get_default_config, load_config, save_config
             from .core.manifests import Manifest
+            from .core.notifications import Notification, NotificationService
             from .core.updater import UpdateChecker
+
+            # Load configuration for notifications if needed
+            config = None
+            if notify:
+                config_dir = get_config_dir()
+                config_path = config_dir / "config.yaml"
+
+                if config_path.exists():
+                    config = load_config(config_path)
+                else:
+                    config = get_default_config()
+                    save_config(config, config_path)
 
             manifest = Manifest.from_yaml(manifest_path)
             checker = await UpdateChecker.create_checker(manifest.type)
@@ -216,6 +245,19 @@ def check_updates(
                     console.print(f"Current version: {update_info.current_version}")
                     console.print(f"Latest version: {update_info.latest_version}")
 
+                    # Send notification if requested
+                    if notify and config:
+                        notification_service = NotificationService(config)
+                        notification = Notification(
+                            title="Update Available",
+                            message=f"A new version of {manifest.name} is available.",
+                            package_name=manifest.name,
+                            current_version=update_info.current_version,
+                            new_version=update_info.latest_version,
+                        )
+                        await notification_service.provider.notify(notification)
+                        console.print("[green]Notification sent[/green]")
+
                     if build_if_needed:
                         # Update manifest with new version
                         manifest.version = update_info.latest_version
@@ -229,10 +271,55 @@ def check_updates(
                         # Build new version
                         console.print("\n[green]Building new version...[/green]")
                         await build_mdm(manifest_path)
+
+                        # Record the update in the database if we have config
+                        if config:
+                            try:
+                                from .core.database import Database
+                                from .core.updater import VersionTracker
+
+                                db = Database(Path(config.db_path))
+                                version_tracker = VersionTracker(db)
+
+                                # Check if package exists in database
+                                package = db.get_package_by_name(manifest.name)
+                                if not package:
+                                    # Add the package to the database
+                                    pkg_id = db.add_package(
+                                        name=manifest.name,
+                                        version=update_info.latest_version,
+                                        status="installed",
+                                    )
+
+                                    # Add the version
+                                    db.add_package_version(
+                                        package_id=pkg_id,
+                                        version=update_info.latest_version,
+                                        url=update_info.download_url,
+                                        is_installed=True,
+                                    )
+                                else:
+                                    # Record the version
+                                    version_tracker.record_version(
+                                        package_name=manifest.name,
+                                        version=update_info.latest_version,
+                                        download_url=update_info.download_url,
+                                    )
+
+                                    # Mark as installed
+                                    version_tracker.mark_version_installed(
+                                        package_name=manifest.name,
+                                        version=update_info.latest_version,
+                                    )
+                            except Exception as db_error:
+                                console.print(
+                                    f"[yellow]Warning: Could not record update in database: {db_error}[/yellow]"
+                                )
                 else:
                     console.print("[green]Package is up to date![/green]")
 
         except Exception as e:
+            console.print(f"[red]Error checking for updates: {e}[/red]")
             raise typer.Exit(1) from e
 
     asyncio.run(async_check())
@@ -359,6 +446,171 @@ def build_mdm(
             raise typer.Exit(1) from e
 
     asyncio.run(async_build())
+
+
+# Create a notification subcommand group
+notifications_app = typer.Typer(name="notifications", help="Manage update notifications")
+app.add_typer(notifications_app)
+
+
+@notifications_app.command("check")
+def check_for_notifications():
+    """Check for available updates and send notifications."""
+
+    async def async_check():
+        try:
+            from .core.config import get_config_dir, get_default_config, load_config, save_config
+            from .core.notifications import NotificationService
+
+            config_dir = get_config_dir()
+            config_path = config_dir / "config.yaml"
+
+            # Load or create config
+            if config_path.exists():
+                config = load_config(config_path)
+            else:
+                config = get_default_config()
+                save_config(config, config_path)
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task_id = progress.add_task("Checking for updates...", total=None)
+
+                # Create notification service
+                service = NotificationService(config)
+
+                # Check for updates and send notifications
+                notification_count = await service.notify_updates()
+
+                progress.update(task_id, completed=True)
+
+                # Save updated last check time
+                save_config(config, config_path)
+
+                if notification_count > 0:
+                    console.print(
+                        f"[green]Sent {notification_count} update notification(s)[/green]"
+                    )
+                else:
+                    console.print("[green]No updates available[/green]")
+
+        except Exception as e:
+            console.print(f"[red]Error checking for updates: {e}[/red]")
+            raise typer.Exit(1) from e
+
+    asyncio.run(async_check())
+
+
+@notifications_app.command("configure")
+def configure_notifications(
+    enabled: Annotated[bool, NOTIFICATION_ENABLED],
+    method: Annotated[str, NOTIFICATION_METHOD],
+    email: Annotated[Optional[str], NOTIFICATION_EMAIL] = None,
+    interval: Annotated[int, NOTIFICATION_INTERVAL] = 24,
+):
+    """Configure notification settings."""
+    try:
+        from .core.config import (
+            NotificationConfig,
+            get_config_dir,
+            get_default_config,
+            load_config,
+            save_config,
+        )
+
+        config_dir = get_config_dir()
+        config_path = config_dir / "config.yaml"
+
+        # Load or create config
+        if config_path.exists():
+            config = load_config(config_path)
+        else:
+            config = get_default_config()
+
+        # Validate method
+        if method not in ["cli", "system", "email"]:
+            console.print(
+                "[red]Error: Invalid notification method. Must be cli, system, or email.[/red]"
+            )
+            raise typer.Exit(1)
+
+        # Validate email if using email notifications
+        if method == "email" and not email:
+            console.print("[red]Error: Email address required for email notifications.[/red]")
+            raise typer.Exit(1)
+
+        # Update notification config
+        config.notifications = NotificationConfig(
+            enabled=enabled,
+            method=method,
+            email=email,
+            check_interval=interval,
+            notify_on_startup=config.notifications.notify_on_startup,
+            last_check=config.notifications.last_check,
+        )
+
+        # Save config
+        save_config(config, config_path)
+
+        console.print("[green]Notification settings updated successfully[/green]")
+        console.print(f"Notifications: {'Enabled' if enabled else 'Disabled'}")
+        console.print(f"Method: {method}")
+        if method == "email":
+            console.print(f"Email: {email}")
+        console.print(f"Check interval: {interval} hours")
+
+    except Exception as e:
+        console.print(f"[red]Error configuring notifications: {e}[/red]")
+        raise typer.Exit(1) from e
+
+
+@notifications_app.command("status")
+def notification_status():
+    """Show current notification settings."""
+    try:
+        from .core.config import get_config_dir, get_default_config, load_config
+
+        config_dir = get_config_dir()
+        config_path = config_dir / "config.yaml"
+
+        # Load or create config
+        if config_path.exists():
+            config = load_config(config_path)
+        else:
+            config = get_default_config()
+            console.print("[yellow]No configuration found. Using default settings.[/yellow]")
+
+        notifications = config.notifications
+
+        console.print("[bold]Notification Settings:[/bold]")
+        console.print(
+            f"Enabled: [{'green' if notifications.enabled else 'red'}]{notifications.enabled}[/]"
+        )
+        console.print(f"Method: {notifications.method}")
+        if notifications.method == "email":
+            console.print(f"Email: {notifications.email or 'Not configured'}")
+        console.print(f"Check interval: {notifications.check_interval} hours")
+
+        if notifications.last_check:
+            try:
+                last_check = datetime.datetime.fromisoformat(notifications.last_check)
+                console.print(f"Last check: {last_check.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                # Calculate next check
+                next_check = last_check + datetime.timedelta(hours=notifications.check_interval)
+                console.print(f"Next check: {next_check.strftime('%Y-%m-%d %H:%M:%S')}")
+
+            except (ValueError, TypeError):
+                console.print("Last check: Never")
+        else:
+            console.print("Last check: Never")
+
+    except Exception as e:
+        console.print(f"[red]Error retrieving notification status: {e}[/red]")
+        raise typer.Exit(1) from e
 
 
 if __name__ == "__main__":

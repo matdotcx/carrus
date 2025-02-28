@@ -8,12 +8,25 @@ import yaml
 
 
 @dataclass
+class NotificationConfig:
+    """Configuration for notifications."""
+
+    enabled: bool = True
+    check_interval: int = 24  # Hours
+    notify_on_startup: bool = True
+    method: str = "cli"  # cli, system, email
+    email: Optional[str] = None
+    last_check: Optional[str] = None
+
+
+@dataclass
 class Config:
     """Configuration data class for carrus."""
 
     db_path: str
     log_dir: str
     repo_url: Optional[str] = None
+    notifications: NotificationConfig = NotificationConfig()
 
 
 def get_config_dir() -> Path:
@@ -57,10 +70,20 @@ def load_config(config_path: Path) -> Config:
 
 def save_config(config: Config, config_path: Path) -> None:
     """Save configuration to YAML file."""
+    notification_dict = {
+        "enabled": config.notifications.enabled,
+        "check_interval": config.notifications.check_interval,
+        "notify_on_startup": config.notifications.notify_on_startup,
+        "method": config.notifications.method,
+        "email": config.notifications.email,
+        "last_check": config.notifications.last_check,
+    }
+
     config_dict = {
         "db_path": config.db_path,
         "log_dir": config.log_dir,
         "repo_url": config.repo_url,
+        "notifications": notification_dict,
     }
 
     with open(config_path, "w") as f:
