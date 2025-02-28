@@ -1,9 +1,12 @@
 """Tests for the Carrus notification system."""
 
 import datetime
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
+import trio
 
 from carrus.core.config import Config, NotificationConfig
 from carrus.core.database import Database
@@ -62,7 +65,7 @@ class TestNotificationProviders:
         provider = CLINotificationProvider()
         assert provider.console is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_cli_provider_notify(self, notification):
         """Test CLI provider notify method."""
         mock_console = MagicMock()
@@ -73,7 +76,7 @@ class TestNotificationProviders:
         assert result is True
         mock_console.print.assert_called()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_system_provider_notify(self, notification):
         """Test system provider notify method with mocked subprocess."""
         provider = SystemNotificationProvider()
@@ -89,7 +92,7 @@ class TestNotificationProviders:
             assert result is True
             mock_exec.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_email_provider_notify(self, notification):
         """Test email provider notify method."""
         provider = EmailNotificationProvider("test@example.com")
@@ -100,7 +103,7 @@ class TestNotificationProviders:
             assert result is True
             mock_log.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_email_provider_no_recipient(self, notification):
         """Test email provider with no recipient."""
         provider = EmailNotificationProvider("")
@@ -111,35 +114,35 @@ class TestNotificationProviders:
             assert result is False
             mock_log.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_slack_provider_notify(self, notification):
+    # Run async code with trio
+    def test_slack_provider_notify(self, notification):
         """Test Slack provider notify method."""
 
         # Create a test provider that always returns success
         class TestSlackProvider(SlackNotificationProvider):
             async def notify(self, notification):
                 # Simulate successful API call
-                logger.info(f"Test: Sent Slack notification for {notification.package_name}")
+                logging.getLogger(__name__).info(f"Test: Sent Slack notification for {notification.package_name}")
                 return True
 
         # Create an instance with our test implementation
         provider = TestSlackProvider("https://hooks.slack.com/services/XXX/YYY/ZZZ")
 
-        # Test the notification
-        result = await provider.notify(notification)
+        # Test the notification using trio to run the async function
+        result = trio.run(provider.notify, notification)
 
         # Verify the result
         assert result is True
 
-    @pytest.mark.asyncio
-    async def test_slack_provider_notify_error(self, notification):
+    # Run async code with trio
+    def test_slack_provider_notify_error(self, notification):
         """Test Slack provider notify method with error response."""
 
         # Create a test provider that simulates an error
         class TestSlackProviderError(SlackNotificationProvider):
             async def notify(self, notification):
                 # Simulate failed API call
-                logger.error("Test: Failed to send Slack notification: 400 - Invalid webhook URL")
+                logging.getLogger(__name__).error("Test: Failed to send Slack notification: 400 - Invalid webhook URL")
                 return False
 
         # Create an instance with our test implementation
@@ -147,13 +150,14 @@ class TestNotificationProviders:
 
         # Test the notification with error
         with patch("logging.Logger.error") as mock_log:
-            result = await provider.notify(notification)
+            # Run the async function with trio
+            result = trio.run(provider.notify, notification)
 
             # Verify the result
             assert result is False
             mock_log.assert_called_once()
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_slack_provider_no_webhook(self, notification):
         """Test Slack provider with no webhook URL."""
         provider = SlackNotificationProvider("")
@@ -229,7 +233,7 @@ class TestNotificationService:
             service.notification_config.enabled = False
             assert service.should_check_updates() is False
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_check_updates(self, test_config, mock_db):
         """Test check_updates method."""
         # Mock version tracker
@@ -258,7 +262,7 @@ class TestNotificationService:
                 # Check last_check was updated
                 assert service.notification_config.last_check is not None
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_notify_updates(self, test_config, mock_db, notification):
         """Test notify_updates method."""
         # Mock check_updates
@@ -279,7 +283,7 @@ class TestNotificationService:
             mock_check.assert_called_once()
             mock_provider.notify.assert_called_once_with(notification)
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_notify_updates_disabled(self, test_config, mock_db):
         """Test notify_updates method when disabled."""
         test_config.notifications.enabled = False

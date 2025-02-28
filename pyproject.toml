@@ -19,6 +19,7 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.20.0",
+    "pytest-trio>=0.8.0",
 ]
 
 [project.scripts]
@@ -32,8 +33,7 @@ build-backend = "hatchling.build"
 packages = ["src/carrus"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "strict"
-asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
