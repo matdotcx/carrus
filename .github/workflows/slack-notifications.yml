@@ -1,0 +1,65 @@
+name: Package Update Notifications
+
+on:
+  # Run daily to check for updates
+  schedule:
+    - cron: '0 9 * * *'  # Run at 9 AM UTC every day
+    
+  # Allow manual trigger
+  workflow_dispatch:
+  
+  # Run when new versions are detected in the version-tracking workflow
+  workflow_run:
+    workflows: ["Version Tracking Tests"]
+    types:
+      - completed
+
+jobs:
+  check-updates:
+    name: Check for Package Updates
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          
+      - name: Check for package updates and send notifications
+        env:
+          # Configure the notification settings via environment variables
+          CARRUS_NOTIFICATION_ENABLED: "true"
+          CARRUS_NOTIFICATION_METHOD: "slack"
+          CARRUS_SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          CARRUS_SLACK_CHANNEL: "#software-updates"
+          CARRUS_SLACK_USERNAME: "Carrus Update Bot"
+        run: |
+          # Use Python to run programmatic check/notify instead of CLI command
+          python -c "
+import asyncio
+from carrus.core.config import get_default_config
+from carrus.core.notifications import NotificationService
+
+async def check_and_notify():
+    config = get_default_config()
+    service = NotificationService(config)
+    
+    # Make sure config is properly loaded
+    print(f'Notification method: {config.notifications.method}')
+    print(f'Slack webhook configured: {bool(config.notifications.slack_webhook_url)}')
+    
+    # Check for updates and send notifications
+    count = await service.notify_updates()
+    print(f'Sent {count} notifications')
+
+asyncio.run(check_and_notify())
+          "

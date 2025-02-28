@@ -1,0 +1,109 @@
+name: MDM Upload Notification
+
+on:
+  # Run when an MDM upload is completed (this could be a custom event or triggered from another workflow)
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: 'Package name'
+        required: true
+      package_version:
+        description: 'Package version'
+        required: true
+      mdm_platform:
+        description: 'MDM platform'
+        required: true
+        default: 'Kandji'
+      status:
+        description: 'Upload status'
+        required: true
+        default: 'success'
+      job_url:
+        description: 'Link to job details'
+        required: false
+
+jobs:
+  send-mdm-notification:
+    name: Send MDM Upload Notification
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          
+      - name: Send MDM upload notification
+        env:
+          CARRUS_NOTIFICATION_ENABLED: "true"
+          CARRUS_NOTIFICATION_METHOD: "slack"
+          CARRUS_SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          CARRUS_SLACK_CHANNEL: "#mdm-deployments"
+          CARRUS_SLACK_USERNAME: "Carrus MDM Bot"
+          
+          # Input values
+          PACKAGE_NAME: ${{ github.event.inputs.package_name }}
+          PACKAGE_VERSION: ${{ github.event.inputs.package_version }}
+          MDM_PLATFORM: ${{ github.event.inputs.mdm_platform }}
+          STATUS: ${{ github.event.inputs.status }}
+          JOB_URL: ${{ github.event.inputs.job_url }}
+        run: |
+          python -c "
+import asyncio
+import datetime
+from carrus.core.config import get_default_config
+from carrus.core.notifications import NotificationService, Notification
+import os
+
+async def send_mdm_notification():
+    # Get configuration with environment variables
+    config = get_default_config()
+    service = NotificationService(config)
+    
+    # Get input parameters
+    package_name = os.environ.get('PACKAGE_NAME')
+    package_version = os.environ.get('PACKAGE_VERSION')
+    mdm_platform = os.environ.get('MDM_PLATFORM')
+    status = os.environ.get('STATUS')
+    job_url = os.environ.get('JOB_URL', '')
+    
+    # Create appropriate title and message based on status
+    if status.lower() == 'success':
+        title = f'MDM Upload Successful'
+        message = f'Package {package_name} v{package_version} has been successfully uploaded to {mdm_platform}.'
+        if job_url:
+            message += f' [View details]({job_url})'
+    else:
+        title = f'MDM Upload Failed'
+        message = f'Failed to upload package {package_name} v{package_version} to {mdm_platform}.'
+        if job_url:
+            message += f' [View error details]({job_url})'
+    
+    # Create notification
+    notification = Notification(
+        title=title,
+        message=message,
+        package_name=package_name,
+        current_version='N/A',
+        new_version=package_version,
+        timestamp=datetime.datetime.now()
+    )
+    
+    # Send notification
+    success = await service.provider.notify(notification)
+    if success:
+        print(f'Successfully sent {status} notification for {package_name} v{package_version}')
+    else:
+        print(f'Failed to send notification')
+
+asyncio.run(send_mdm_notification())
+          "

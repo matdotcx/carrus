@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import json
 import logging
 import re
 import subprocess
@@ -9,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 
 import aiohttp
 from rich.console import Console
@@ -299,6 +300,100 @@ class GitHubNotificationProvider(NotificationProvider):
             return False
 
 
+class SlackNotificationProvider(NotificationProvider):
+    """Slack notification provider using webhooks."""
+
+    def __init__(self, webhook_url: str, channel: Optional[str] = None, username: str = "Carrus Update Bot"):
+        self.webhook_url = webhook_url
+        self.channel = channel
+        self.username = username
+    
+    async def notify(self, notification: Notification) -> bool:
+        """Send a Slack notification using webhooks."""
+        if not self.webhook_url:
+            logger.error("No webhook URL provided for Slack notification")
+            return False
+            
+        try:
+            # Format message blocks for Slack
+            blocks = [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text", 
+                        "text": notification.title
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": notification.message
+                    }
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Package:*\n{notification.package_name}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Current Version:*\n{notification.current_version}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*New Version:*\n{notification.new_version}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*Timestamp:*\n{notification.timestamp.isoformat()}"
+                        }
+                    ]
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "Sent by Carrus Update Notification System"
+                        }
+                    ]
+                }
+            ]
+            
+            # Create the message payload
+            payload: Dict[str, Union[str, List, Dict]] = {
+                "username": self.username,
+                "text": f"Update Available: {notification.package_name} {notification.new_version}",
+                "blocks": blocks
+            }
+            
+            # Add channel if specified
+            if self.channel:
+                payload["channel"] = self.channel
+                
+            # Send the webhook request
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self.webhook_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                ) as response:
+                    if response.status != 200:
+                        response_text = await response.text()
+                        logger.error(f"Failed to send Slack notification: {response.status} - {response_text}")
+                        return False
+                    
+                    logger.info(f"Sent Slack notification for {notification.package_name}")
+                    return True
+                    
+        except Exception as e:
+            logger.error(f"Failed to send Slack notification: {e}")
+            return False
+
+
 class NotificationService:
     """Service for managing notifications."""
 
@@ -323,6 +418,15 @@ class NotificationService:
                 token=self.notification_config.github_token,
                 repo=self.notification_config.github_repo,
                 label=self.notification_config.github_issue_label,
+            )
+        elif (
+            self.notification_config.method == "slack"
+            and self.notification_config.slack_webhook_url
+        ):
+            self.provider = SlackNotificationProvider(
+                webhook_url=self.notification_config.slack_webhook_url,
+                channel=self.notification_config.slack_channel,
+                username=self.notification_config.slack_username,
             )
         else:
             self.provider = CLINotificationProvider()
@@ -395,9 +499,12 @@ class NotificationService:
         github_token: Optional[str] = None,
         github_repo: Optional[str] = None,
         github_label: Optional[str] = None,
+        slack_webhook_url: Optional[str] = None,
+        slack_channel: Optional[str] = None,
+        slack_username: Optional[str] = None,
     ) -> None:
         """Set the notification method."""
-        if method not in ["cli", "system", "email", "github"]:
+        if method not in ["cli", "system", "email", "github", "slack"]:
             raise ValueError(f"Invalid notification method: {method}")
 
         self.notification_config.method = method
@@ -422,6 +529,21 @@ class NotificationService:
                 token=github_token,
                 repo=github_repo,
                 label=github_label or self.notification_config.github_issue_label,
+            )
+        elif method == "slack":
+            if not slack_webhook_url:
+                raise ValueError("Slack webhook URL required for Slack notifications")
+            
+            self.notification_config.slack_webhook_url = slack_webhook_url
+            if slack_channel:
+                self.notification_config.slack_channel = slack_channel
+            if slack_username:
+                self.notification_config.slack_username = slack_username
+                
+            self.provider = SlackNotificationProvider(
+                webhook_url=slack_webhook_url,
+                channel=slack_channel,
+                username=slack_username or self.notification_config.slack_username,
             )
         elif method == "system":
             self.provider = SystemNotificationProvider()

@@ -30,7 +30,7 @@ NOTIFICATION_ENABLED = typer.Option(
     True, "--enabled/--disabled", help="Enable or disable notifications"
 )
 NOTIFICATION_METHOD = typer.Option(
-    "cli", "--method", "-m", help="Notification method: cli, system, email, or github"
+    "cli", "--method", "-m", help="Notification method: cli, system, email, github, or slack"
 )
 NOTIFICATION_EMAIL = typer.Option(None, "--email", "-e", help="Email address for notifications")
 NOTIFICATION_INTERVAL = typer.Option(24, "--interval", "-i", help="Check interval in hours")
@@ -42,6 +42,15 @@ NOTIFICATION_GITHUB_REPO = typer.Option(
 )
 NOTIFICATION_GITHUB_LABEL = typer.Option(
     "update-available", "--github-label", help="GitHub issue label"
+)
+NOTIFICATION_SLACK_WEBHOOK = typer.Option(
+    None, "--slack-webhook", help="Slack webhook URL for sending notifications"
+)
+NOTIFICATION_SLACK_CHANNEL = typer.Option(
+    None, "--slack-channel", help="Slack channel to send notifications to (optional)"
+)
+NOTIFICATION_SLACK_USERNAME = typer.Option(
+    "Carrus Update Bot", "--slack-username", help="Username for Slack notifications"
 )
 
 app = typer.Typer(name="carrus", help="Modern macOS package manager")
@@ -522,6 +531,9 @@ def configure_notifications(
     github_token: Annotated[Optional[str], NOTIFICATION_GITHUB_TOKEN] = None,
     github_repo: Annotated[Optional[str], NOTIFICATION_GITHUB_REPO] = None,
     github_label: Annotated[Optional[str], NOTIFICATION_GITHUB_LABEL] = "update-available",
+    slack_webhook: Annotated[Optional[str], NOTIFICATION_SLACK_WEBHOOK] = None,
+    slack_channel: Annotated[Optional[str], NOTIFICATION_SLACK_CHANNEL] = None,
+    slack_username: Annotated[Optional[str], NOTIFICATION_SLACK_USERNAME] = "Carrus Update Bot",
 ):
     """Configure notification settings."""
     try:
@@ -543,9 +555,9 @@ def configure_notifications(
             config = get_default_config()
 
         # Validate method
-        if method not in ["cli", "system", "email", "github"]:
+        if method not in ["cli", "system", "email", "github", "slack"]:
             console.print(
-                "[red]Error: Invalid notification method. Must be cli, system, email, or github.[/red]"
+                "[red]Error: Invalid notification method. Must be cli, system, email, github, or slack.[/red]"
             )
             raise typer.Exit(1)
 
@@ -564,6 +576,11 @@ def configure_notifications(
                     "[red]Error: GitHub repository required for GitHub notifications.[/red]"
                 )
                 raise typer.Exit(1)
+                
+        # Validate Slack settings if using Slack notifications
+        if method == "slack" and not slack_webhook:
+            console.print("[red]Error: Slack webhook URL required for Slack notifications.[/red]")
+            raise typer.Exit(1)
 
         # Update notification config
         config.notifications = NotificationConfig(
@@ -576,6 +593,9 @@ def configure_notifications(
             github_token=github_token,
             github_repo=github_repo,
             github_issue_label=github_label,
+            slack_webhook_url=slack_webhook,
+            slack_channel=slack_channel,
+            slack_username=slack_username,
         )
 
         # Save config
@@ -590,6 +610,11 @@ def configure_notifications(
             console.print(f"GitHub Repository: {github_repo}")
             console.print(f"GitHub Issue Label: {github_label}")
             console.print(f"GitHub Token: {'Configured' if github_token else 'Not configured'}")
+        elif method == "slack":
+            console.print(f"Slack Webhook: {'Configured' if slack_webhook else 'Not configured'}")
+            if slack_channel:
+                console.print(f"Slack Channel: {slack_channel}")
+            console.print(f"Slack Username: {slack_username}")
         console.print(f"Check interval: {interval} hours")
 
     except Exception as e:
@@ -628,6 +653,13 @@ def notification_status():
             console.print(
                 f"GitHub Token: {'Configured' if notifications.github_token else 'Not configured'}"
             )
+        elif notifications.method == "slack":
+            console.print(
+                f"Slack Webhook: {'Configured' if notifications.slack_webhook_url else 'Not configured'}"
+            )
+            if notifications.slack_channel:
+                console.print(f"Slack Channel: {notifications.slack_channel}")
+            console.print(f"Slack Username: {notifications.slack_username}")
         console.print(f"Check interval: {notifications.check_interval} hours")
 
         if notifications.last_check:

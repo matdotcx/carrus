@@ -15,9 +15,10 @@ Modern macOS package manager with MDM integration.
 - 🔒 Built-in code signing verification
 - 📦 Modern package management
 - 🤖 MDM integration (Kandji support)
-- 🔄 Automatic updates
+- 🔄 Automatic updates with notifications
 - 🏗️ Custom package building
 - ✅ Comprehensive verification
+- 🔔 Multi-channel notifications (CLI, System, Email, GitHub, Slack)
 
 ## Installation
 
@@ -62,4 +63,21 @@ carrus download firefox.yaml
 ```bash
 carrus build-mdm firefox.yaml
 ```
+
+4. Configure notifications:
+```bash
+carrus notifications configure --method slack --slack-webhook https://hooks.slack.com/services/XXX/YYY/ZZZ --slack-channel "#software-updates"
+```
+
+## Notification Support
+
+Carrus supports multiple notification channels:
+
+- **CLI**: Simple command-line notifications
+- **System**: Native macOS notifications
+- **Email**: Email notifications
+- **GitHub**: Creates/updates GitHub issues for available updates
+- **Slack**: Rich Slack notifications
+
+For GitHub Actions integration and advanced Slack setup, see [Slack Notifications Documentation](docs/slack-notifications.md).
 

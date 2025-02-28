@@ -161,3 +161,16 @@ carrus verify Firefox.dmg
 4. Include MDM configuration for managed deployments
 5. Document any customizations
 6. Use appropriate recipe types for auto-updates
+
+## Related Features
+
+### Notifications
+
+When updates are available for packages defined in recipes, Carrus can send notifications through various channels, including Slack. This is particularly useful for automated environments like GitHub Actions workflows.
+
+```bash
+# Configure Slack notifications
+carrus notifications configure --method slack --slack-webhook https://hooks.slack.com/services/XXX/YYY/ZZZ
+```
+
+See the [Slack Notifications Documentation](slack-notifications.md) for more information on setting up notifications in GitHub Actions.

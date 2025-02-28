@@ -1,6 +1,6 @@
 # src/carrus/core/config.py
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -14,11 +14,14 @@ class NotificationConfig:
     enabled: bool = True
     check_interval: int = 24  # Hours
     notify_on_startup: bool = True
-    method: str = "cli"  # cli, system, email, github
+    method: str = "cli"  # cli, system, email, github, slack
     email: Optional[str] = None
     github_token: Optional[str] = None
     github_repo: Optional[str] = None
     github_issue_label: str = "update-available"
+    slack_webhook_url: Optional[str] = None
+    slack_channel: Optional[str] = None
+    slack_username: str = "Carrus Update Bot"
     last_check: Optional[str] = None
 
 
@@ -29,7 +32,9 @@ class Config:
     db_path: str
     log_dir: str
     repo_url: Optional[str] = None
-    notifications: NotificationConfig = NotificationConfig()
+    
+    # Using default_factory to avoid mutable default issue
+    notifications: NotificationConfig = field(default_factory=NotificationConfig)
 
 
 def get_config_dir() -> Path:
@@ -59,8 +64,45 @@ def get_default_config() -> Config:
     db_path = os.environ.get("CARRUS_DB_PATH", str(get_config_dir() / "carrus.db"))
     log_dir = os.environ.get("CARRUS_LOG_DIR", str(get_config_dir() / "logs"))
     repo_url = os.environ.get("CARRUS_REPO_URL")
-
-    return Config(db_path=db_path, log_dir=log_dir, repo_url=repo_url)
+    
+    # Create the basic config
+    config = Config(db_path=db_path, log_dir=log_dir, repo_url=repo_url)
+    
+    # Apply notification environment variables if present
+    if os.environ.get("CARRUS_NOTIFICATION_ENABLED") is not None:
+        config.notifications.enabled = os.environ.get("CARRUS_NOTIFICATION_ENABLED").lower() == "true"
+    
+    if os.environ.get("CARRUS_NOTIFICATION_METHOD"):
+        config.notifications.method = os.environ.get("CARRUS_NOTIFICATION_METHOD")
+        
+    # Email settings
+    if os.environ.get("CARRUS_NOTIFICATION_EMAIL"):
+        config.notifications.email = os.environ.get("CARRUS_NOTIFICATION_EMAIL")
+        
+    # GitHub settings
+    if os.environ.get("CARRUS_GITHUB_TOKEN"):
+        config.notifications.github_token = os.environ.get("CARRUS_GITHUB_TOKEN")
+    if os.environ.get("CARRUS_GITHUB_REPO"):
+        config.notifications.github_repo = os.environ.get("CARRUS_GITHUB_REPO")
+    if os.environ.get("CARRUS_GITHUB_ISSUE_LABEL"):
+        config.notifications.github_issue_label = os.environ.get("CARRUS_GITHUB_ISSUE_LABEL")
+        
+    # Slack settings
+    if os.environ.get("CARRUS_SLACK_WEBHOOK_URL"):
+        config.notifications.slack_webhook_url = os.environ.get("CARRUS_SLACK_WEBHOOK_URL")
+    if os.environ.get("CARRUS_SLACK_CHANNEL"):
+        config.notifications.slack_channel = os.environ.get("CARRUS_SLACK_CHANNEL")
+    if os.environ.get("CARRUS_SLACK_USERNAME"):
+        config.notifications.slack_username = os.environ.get("CARRUS_SLACK_USERNAME")
+        
+    # Check interval
+    if os.environ.get("CARRUS_NOTIFICATION_CHECK_INTERVAL"):
+        try:
+            config.notifications.check_interval = int(os.environ.get("CARRUS_NOTIFICATION_CHECK_INTERVAL"))
+        except ValueError:
+            pass  # Use default if invalid
+            
+    return config
 
 
 def load_config(config_path: Path) -> Config:
@@ -82,6 +124,9 @@ def save_config(config: Config, config_path: Path) -> None:
         "github_token": config.notifications.github_token,
         "github_repo": config.notifications.github_repo,
         "github_issue_label": config.notifications.github_issue_label,
+        "slack_webhook_url": config.notifications.slack_webhook_url,
+        "slack_channel": config.notifications.slack_channel,
+        "slack_username": config.notifications.slack_username,
         "last_check": config.notifications.last_check,
     }
 
