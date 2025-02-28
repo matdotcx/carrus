@@ -27,7 +27,7 @@ SEARCH_TERM = typer.Argument(..., help="Search term")
 
 # Notification options
 NOTIFICATION_ENABLED = typer.Option(
-    True, "--enabled/--disabled", "-e/-d", help="Enable or disable notifications"
+    True, help="Enable or disable notifications"
 )
 NOTIFICATION_METHOD = typer.Option(
     "cli", "--method", "-m", help="Notification method: cli, system, email, github, or slack"
@@ -524,7 +524,7 @@ def check_for_notifications():
 
 @notifications_app.command("configure")
 def configure_notifications(
-    enabled: Annotated[bool, NOTIFICATION_ENABLED],
+    enabled: Annotated[bool, typer.Option(True, "--enabled/--disabled", help="Enable or disable notifications")],
     method: Annotated[str, NOTIFICATION_METHOD],
     email: Annotated[Optional[str], NOTIFICATION_EMAIL] = None,
     interval: Annotated[int, NOTIFICATION_INTERVAL] = 24,
