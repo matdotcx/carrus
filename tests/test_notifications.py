@@ -89,10 +89,10 @@ class TestNotificationProviders:
             with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
                 result = await provider.notify(notification)
                 return result, mock_exec
-        
+
         # Run the async function with asyncio
         result, mock_exec = asyncio.run(run_test())
-        
+
         assert result is True
         mock_exec.assert_called_once()
 
@@ -104,10 +104,10 @@ class TestNotificationProviders:
             with patch("logging.Logger.info") as mock_log:
                 result = await provider.notify(notification)
                 return result, mock_log
-                
+
         # Run the async function with asyncio
         result, mock_log = asyncio.run(run_test())
-                
+
         assert result is True
         mock_log.assert_called_once()
 
@@ -119,10 +119,10 @@ class TestNotificationProviders:
             with patch("logging.Logger.error") as mock_log:
                 result = await provider.notify(notification)
                 return result, mock_log
-            
+
         # Run the async function with asyncio
         result, mock_log = asyncio.run(run_test())
-            
+
         assert result is False
         mock_log.assert_called_once()
 
@@ -133,7 +133,9 @@ class TestNotificationProviders:
         class TestSlackProvider(SlackNotificationProvider):
             async def notify(self, notification):
                 # Simulate successful API call
-                logging.getLogger(__name__).info(f"Test: Sent Slack notification for {notification.package_name}")
+                logging.getLogger(__name__).info(
+                    f"Test: Sent Slack notification for {notification.package_name}"
+                )
                 return True
 
         # Create an instance with our test implementation
@@ -156,7 +158,9 @@ class TestNotificationProviders:
         class TestSlackProviderError(SlackNotificationProvider):
             async def notify(self, notification):
                 # Simulate failed API call
-                logging.getLogger(__name__).error("Test: Failed to send Slack notification: 400 - Invalid webhook URL")
+                logging.getLogger(__name__).error(
+                    "Test: Failed to send Slack notification: 400 - Invalid webhook URL"
+                )
                 return False
 
         # Create an instance with our test implementation
@@ -183,10 +187,10 @@ class TestNotificationProviders:
             with patch("logging.Logger.error") as mock_log:
                 result = await provider.notify(notification)
                 return result, mock_log
-            
+
         # Run the async function with asyncio
         result, mock_log = asyncio.run(run_test())
-            
+
         assert result is False
         mock_log.assert_called_once()
 
@@ -275,7 +279,7 @@ class TestNotificationService:
                     service = NotificationService(test_config)
                     notifications = await service.check_updates()
                     return notifications, service.notification_config
-        
+
         # Run the async function with asyncio
         notifications, notification_config = asyncio.run(run_test())
 
@@ -303,7 +307,7 @@ class TestNotificationService:
                 service.provider = mock_provider
                 count = await service.notify_updates()
                 return count, mock_check, mock_provider
-        
+
         # Run the async function with asyncio
         count, mock_check, mock_provider = asyncio.run(run_test())
 
@@ -319,7 +323,7 @@ class TestNotificationService:
             with patch("carrus.core.notifications.Database", return_value=mock_db):
                 service = NotificationService(test_config)
                 return await service.notify_updates()
-        
+
         # Run the async function with asyncio
         count = asyncio.run(run_test())
 
