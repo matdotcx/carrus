@@ -28,7 +28,7 @@ def mock_db():
 def test_config():
     """Fixture for test configuration."""
     import tempfile
-    
+
     temp_dir = tempfile.mkdtemp()
     return Config(
         db_path=f"{temp_dir}/test.db",
@@ -115,52 +115,52 @@ class TestNotificationProviders:
     async def test_slack_provider_notify(self, notification):
         """Test Slack provider notify method."""
         provider = SlackNotificationProvider("https://hooks.slack.com/services/XXX/YYY/ZZZ")
-        
+
         # Mock the response from Slack API
         mock_response = AsyncMock()
         mock_response.status = 200
-        
+
         # Mock the client session
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_session
         mock_session.post = AsyncMock(return_value=mock_response)
-        
+
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await provider.notify(notification)
-            
+
             assert result is True
             mock_session.post.assert_called_once()
-            
+
     @pytest.mark.asyncio
     async def test_slack_provider_notify_error(self, notification):
         """Test Slack provider notify method with error response."""
         provider = SlackNotificationProvider("https://hooks.slack.com/services/XXX/YYY/ZZZ")
-        
+
         # Mock the response from Slack API with error
         mock_response = AsyncMock()
         mock_response.status = 400
         mock_response.text = AsyncMock(return_value="Invalid webhook URL")
-        
+
         # Mock the client session
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_session
         mock_session.post = AsyncMock(return_value=mock_response)
-        
+
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with patch("logging.Logger.error") as mock_log:
                 result = await provider.notify(notification)
-                
+
                 assert result is False
                 mock_log.assert_called_once()
-                
+
     @pytest.mark.asyncio
     async def test_slack_provider_no_webhook(self, notification):
         """Test Slack provider with no webhook URL."""
         provider = SlackNotificationProvider("")
-        
+
         with patch("logging.Logger.error") as mock_log:
             result = await provider.notify(notification)
-            
+
             assert result is False
             mock_log.assert_called_once()
 
@@ -195,7 +195,7 @@ class TestNotificationService:
             service = NotificationService(test_config)
 
             assert isinstance(service.provider, EmailNotificationProvider)
-            
+
     def test_init_with_slack_method(self, test_config, mock_db):
         """Test service initialization with slack method."""
         test_config.notifications.method = "slack"
@@ -306,15 +306,18 @@ class TestNotificationService:
             assert service.notification_config.method == "email"
             assert service.notification_config.email == "test@example.com"
             assert isinstance(service.provider, EmailNotificationProvider)
-            
+
             # Change to slack
             service.set_notification_method(
-                "slack", 
+                "slack",
                 slack_webhook_url="https://hooks.slack.com/services/XXX/YYY/ZZZ",
-                slack_channel="#updates"
+                slack_channel="#updates",
             )
             assert service.notification_config.method == "slack"
-            assert service.notification_config.slack_webhook_url == "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+            assert (
+                service.notification_config.slack_webhook_url
+                == "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+            )
             assert service.notification_config.slack_channel == "#updates"
             assert isinstance(service.provider, SlackNotificationProvider)
 
@@ -330,7 +333,7 @@ class TestNotificationService:
             # Email without address
             with pytest.raises(ValueError):
                 service.set_notification_method("email")
-                
+
             # Slack without webhook URL
             with pytest.raises(ValueError):
                 service.set_notification_method("slack")

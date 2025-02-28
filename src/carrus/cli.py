@@ -576,7 +576,7 @@ def configure_notifications(
                     "[red]Error: GitHub repository required for GitHub notifications.[/red]"
                 )
                 raise typer.Exit(1)
-                
+
         # Validate Slack settings if using Slack notifications
         if method == "slack" and not slack_webhook:
             console.print("[red]Error: Slack webhook URL required for Slack notifications.[/red]")
