@@ -120,10 +120,14 @@ class TestNotificationProviders:
         mock_response = AsyncMock()
         mock_response.status = 200
 
-        # Mock the client session
+        # Create a proper async context manager mock for the post response
+        mock_post_cm = AsyncMock()
+        mock_post_cm.__aenter__.return_value = mock_response
+
+        # Mock the session
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_session
-        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.post.return_value = mock_post_cm
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await provider.notify(notification)
@@ -141,10 +145,14 @@ class TestNotificationProviders:
         mock_response.status = 400
         mock_response.text = AsyncMock(return_value="Invalid webhook URL")
 
-        # Mock the client session
+        # Create a proper async context manager mock for the post response
+        mock_post_cm = AsyncMock()
+        mock_post_cm.__aenter__.return_value = mock_response
+
+        # Mock the session
         mock_session = AsyncMock()
         mock_session.__aenter__.return_value = mock_session
-        mock_session.post = AsyncMock(return_value=mock_response)
+        mock_session.post.return_value = mock_post_cm
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
             with patch("logging.Logger.error") as mock_log:
