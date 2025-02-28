@@ -27,12 +27,12 @@ SEARCH_TERM = typer.Argument(..., help="Search term")
 
 # Notification options
 NOTIFICATION_ENABLED = typer.Option(
-    True, "--enabled/--disabled", help="Enable or disable notifications"
+    True, "--enabled/--disabled", "-e/-d", help="Enable or disable notifications"
 )
 NOTIFICATION_METHOD = typer.Option(
     "cli", "--method", "-m", help="Notification method: cli, system, email, github, or slack"
 )
-NOTIFICATION_EMAIL = typer.Option(None, "--email", "-e", help="Email address for notifications")
+NOTIFICATION_EMAIL = typer.Option(None, "--email", help="Email address for notifications")
 NOTIFICATION_INTERVAL = typer.Option(24, "--interval", "-i", help="Check interval in hours")
 NOTIFICATION_GITHUB_TOKEN = typer.Option(
     None, "--github-token", help="GitHub token for authentication"
