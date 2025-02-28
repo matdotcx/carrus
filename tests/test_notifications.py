@@ -1,12 +1,11 @@
 """Tests for the Carrus notification system."""
 
+import asyncio
 import datetime
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
-import trio
 
 from carrus.core.config import Config, NotificationConfig
 from carrus.core.database import Database
@@ -70,8 +69,8 @@ class TestNotificationProviders:
         mock_console = MagicMock()
         provider = CLINotificationProvider(console=mock_console)
 
-        # Run the async function with trio
-        result = trio.run(provider.notify, notification)
+        # Run the async function using asyncio
+        result = asyncio.run(provider.notify(notification))
 
         assert result is True
         mock_console.print.assert_called()
@@ -91,8 +90,8 @@ class TestNotificationProviders:
                 result = await provider.notify(notification)
                 return result, mock_exec
         
-        # Run the async function with trio
-        result, mock_exec = trio.run(run_test)
+        # Run the async function with asyncio
+        result, mock_exec = asyncio.run(run_test())
         
         assert result is True
         mock_exec.assert_called_once()
@@ -106,9 +105,9 @@ class TestNotificationProviders:
                 result = await provider.notify(notification)
                 return result, mock_log
                 
-        # Run the async function with trio
-        result, mock_log = trio.run(run_test)
-
+        # Run the async function with asyncio
+        result, mock_log = asyncio.run(run_test())
+                
         assert result is True
         mock_log.assert_called_once()
 
@@ -121,13 +120,12 @@ class TestNotificationProviders:
                 result = await provider.notify(notification)
                 return result, mock_log
             
-        # Run the async function with trio
-        result, mock_log = trio.run(run_test)
-
+        # Run the async function with asyncio
+        result, mock_log = asyncio.run(run_test())
+            
         assert result is False
         mock_log.assert_called_once()
 
-    # Run async code with trio
     def test_slack_provider_notify(self, notification):
         """Test Slack provider notify method."""
 
@@ -145,13 +143,12 @@ class TestNotificationProviders:
         async def run_test():
             return await provider.notify(notification)
 
-        # Test the notification using trio to run the async function
-        result = trio.run(run_test)
+        # Test the notification using asyncio to run the async function
+        result = asyncio.run(run_test())
 
         # Verify the result
         assert result is True
 
-    # Run async code with trio
     def test_slack_provider_notify_error(self, notification):
         """Test Slack provider notify method with error response."""
 
@@ -171,8 +168,8 @@ class TestNotificationProviders:
                 result = await provider.notify(notification)
                 return result, mock_log
 
-        # Run the async function with trio
-        result, mock_log = trio.run(run_test)
+        # Run the async function with asyncio
+        result, mock_log = asyncio.run(run_test())
 
         # Verify the result
         assert result is False
@@ -187,9 +184,9 @@ class TestNotificationProviders:
                 result = await provider.notify(notification)
                 return result, mock_log
             
-        # Run the async function with trio
-        result, mock_log = trio.run(run_test)
-
+        # Run the async function with asyncio
+        result, mock_log = asyncio.run(run_test())
+            
         assert result is False
         mock_log.assert_called_once()
 
@@ -279,8 +276,8 @@ class TestNotificationService:
                     notifications = await service.check_updates()
                     return notifications, service.notification_config
         
-        # Run the async function with trio
-        notifications, notification_config = trio.run(run_test)
+        # Run the async function with asyncio
+        notifications, notification_config = asyncio.run(run_test())
 
         assert len(notifications) == 1
         assert notifications[0].package_name == "TestApp"
@@ -307,8 +304,8 @@ class TestNotificationService:
                 count = await service.notify_updates()
                 return count, mock_check, mock_provider
         
-        # Run the async function with trio
-        count, mock_check, mock_provider = trio.run(run_test)
+        # Run the async function with asyncio
+        count, mock_check, mock_provider = asyncio.run(run_test())
 
         assert count == 1
         mock_check.assert_called_once()
@@ -323,8 +320,8 @@ class TestNotificationService:
                 service = NotificationService(test_config)
                 return await service.notify_updates()
         
-        # Run the async function with trio
-        count = trio.run(run_test)
+        # Run the async function with asyncio
+        count = asyncio.run(run_test())
 
         assert count == 0
 
