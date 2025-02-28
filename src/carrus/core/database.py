@@ -287,6 +287,176 @@ class Database:
         except sqlite3.Error as e:
             raise DatabaseError(f"Failed to get package history: {e}") from e
 
+    def add_package_version(
+        self,
+        package_id: int,
+        version: str,
+        url: str,
+        checksum: Optional[str] = None,
+        release_date: Optional[str] = None,
+        is_installed: bool = False,
+    ) -> int:
+        """Add a new version for an existing package."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # Verify the package exists
+                cursor.execute("SELECT id FROM packages WHERE id = ?", (package_id,))
+                if not cursor.fetchone():
+                    raise DatabaseError(f"Package with ID {package_id} not found")
+
+                # Check if this version already exists
+                cursor.execute(
+                    """
+                    SELECT id FROM versions 
+                    WHERE package_id = ? AND version = ?
+                    """,
+                    (package_id, version),
+                )
+                existing_version = cursor.fetchone()
+                if existing_version:
+                    # Update the existing version
+                    cursor.execute(
+                        """
+                        UPDATE versions 
+                        SET url = ?, checksum = ?, release_date = ?, is_installed = ?
+                        WHERE id = ?
+                        """,
+                        (url, checksum, release_date, is_installed, existing_version[0]),
+                    )
+                    version_id = existing_version[0]
+                else:
+                    # Insert a new version
+                    cursor.execute(
+                        """
+                        INSERT INTO versions 
+                        (package_id, version, url, checksum, release_date, is_installed)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (package_id, version, url, checksum, release_date, is_installed),
+                    )
+                    version_id = cursor.lastrowid
+
+                conn.commit()
+                return version_id
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Failed to add package version: {e}") from e
+
+    def get_package_versions(self, package_id: int) -> List[Dict[str, Any]]:
+        """Get all versions for a package ordered by version number (latest first)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT * FROM versions
+                    WHERE package_id = ?
+                    ORDER BY id DESC
+                    """,
+                    (package_id,),
+                )
+                return [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Failed to get package versions: {e}") from e
+
+    def get_latest_version(self, package_id: int) -> Optional[Dict[str, Any]]:
+        """Get the latest version for a package based on creation date."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT * FROM versions
+                    WHERE package_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (package_id,),
+                )
+                result = cursor.fetchone()
+                return dict(result) if result else None
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Failed to get latest version: {e}") from e
+
+    def get_installed_version(self, package_id: int) -> Optional[Dict[str, Any]]:
+        """Get the currently installed version for a package."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT * FROM versions
+                    WHERE package_id = ? AND is_installed = 1
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    (package_id,),
+                )
+                result = cursor.fetchone()
+                return dict(result) if result else None
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Failed to get installed version: {e}") from e
+
+    def update_version_installed_status(self, version_id: int, installed: bool = True):
+        """Update the installed status of a specific version."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # Verify the version exists
+                cursor.execute("SELECT id FROM versions WHERE id = ?", (version_id,))
+                if not cursor.fetchone():
+                    raise DatabaseError(f"Version with ID {version_id} not found")
+
+                # Update the installed status
+                cursor.execute(
+                    """
+                    UPDATE versions 
+                    SET is_installed = ?
+                    WHERE id = ?
+                    """,
+                    (installed, version_id),
+                )
+
+                # If marking as installed, ensure no other versions of this package are marked as installed
+                if installed:
+                    cursor.execute(
+                        """
+                        SELECT package_id FROM versions WHERE id = ?
+                        """,
+                        (version_id,),
+                    )
+                    package_id = cursor.fetchone()[0]
+
+                    cursor.execute(
+                        """
+                        UPDATE versions 
+                        SET is_installed = 0
+                        WHERE package_id = ? AND id != ?
+                        """,
+                        (package_id, version_id),
+                    )
+
+                conn.commit()
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Failed to update version installed status: {e}") from e
+
+    def get_package_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get a package by name."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT * FROM packages
+                    WHERE name = ?
+                    """,
+                    (name,),
+                )
+                result = cursor.fetchone()
+                return dict(result) if result else None
+        except sqlite3.Error as e:
+            raise DatabaseError(f"Failed to get package by name: {e}") from e
+
     def backup_database(self, backup_path: Path):
         """Create a backup of the database."""
         try:

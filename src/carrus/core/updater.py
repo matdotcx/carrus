@@ -6,10 +6,12 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 from packaging import version
+
+from carrus.core.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,193 @@ class FirefoxUpdateChecker(UpdateChecker):
             logger.error(f"Error checking Firefox update: {e}")
 
         return None
+
+
+class VersionTracker:
+    """Tracks software versions and manages updates."""
+
+    def __init__(self, db: Database):
+        """Initialize with database connection."""
+        self.db = db
+
+    async def check_for_updates(self, recipe_type: str, package_name: str) -> Optional[UpdateInfo]:
+        """Check if updates are available for a specific package."""
+        # Get package from database
+        package = self.db.get_package_by_name(package_name)
+        if not package:
+            logger.warning(
+                f"Cannot check for updates: Package {package_name} not found in database"
+            )
+            return None
+
+        # Get current installed version
+        current_version = package.get("version", "0.0.0")
+
+        # Get an appropriate checker for the recipe type
+        checker = await UpdateChecker.create_checker(recipe_type)
+
+        # Check for updates
+        update_info = await checker.check_update(current_version)
+
+        if update_info:
+            # Record the new version in the database if it doesn't exist
+            if self._compare_versions(update_info.latest_version, current_version) > 0:
+                self.db.add_package_version(
+                    package_id=package["id"],
+                    version=update_info.latest_version,
+                    url=update_info.download_url,
+                    release_date=update_info.release_date.isoformat()
+                    if update_info.release_date
+                    else None,
+                )
+
+            return update_info
+
+        return None
+
+    def record_version(
+        self,
+        package_name: str,
+        version: str,
+        download_url: str,
+        checksum: Optional[str] = None,
+        release_date: Optional[datetime] = None,
+    ) -> bool:
+        """Record a new version for a package."""
+        # Get package from database
+        package = self.db.get_package_by_name(package_name)
+        if not package:
+            logger.warning(f"Cannot record version: Package {package_name} not found in database")
+            return False
+
+        # Add the version
+        release_date_str = release_date.isoformat() if release_date else None
+        self.db.add_package_version(
+            package_id=package["id"],
+            version=version,
+            url=download_url,
+            checksum=checksum,
+            release_date=release_date_str,
+        )
+
+        return True
+
+    def get_version_history(self, package_name: str) -> List[Dict[str, Any]]:
+        """Get version history for a package."""
+        package = self.db.get_package_by_name(package_name)
+        if not package:
+            logger.warning(
+                f"Cannot get version history: Package {package_name} not found in database"
+            )
+            return []
+
+        return self.db.get_package_versions(package["id"])
+
+    def get_available_updates(self) -> List[Tuple[Dict[str, Any], Dict[str, Any]]]:
+        """Get all packages with available updates."""
+        updates = []
+
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            # Get all packages
+            cursor.execute("SELECT * FROM packages")
+            packages = [dict(row) for row in cursor.fetchall()]
+
+            for package in packages:
+                # Get installed version
+                installed_version = self.db.get_installed_version(package["id"])
+
+                # If no installed version, continue
+                if not installed_version:
+                    continue
+
+                # Get latest available version
+                latest_version = self.db.get_latest_version(package["id"])
+
+                # If latest version is newer than installed, add to updates
+                if (
+                    latest_version
+                    and self._compare_versions(
+                        latest_version["version"], installed_version["version"]
+                    )
+                    > 0
+                ):
+                    updates.append((package, latest_version))
+
+        return updates
+
+    def mark_version_installed(self, package_name: str, version: str) -> bool:
+        """Mark a specific version as installed."""
+        package = self.db.get_package_by_name(package_name)
+        if not package:
+            logger.warning(
+                f"Cannot mark version installed: Package {package_name} not found in database"
+            )
+            return False
+
+        # Find the version
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id FROM versions 
+                WHERE package_id = ? AND version = ?
+                """,
+                (package["id"], version),
+            )
+            result = cursor.fetchone()
+            if not result:
+                logger.warning(
+                    f"Cannot mark version installed: Version {version} not found for {package_name}"
+                )
+                return False
+
+            version_id = result[0]
+
+        # Mark as installed
+        self.db.update_version_installed_status(version_id, installed=True)
+
+        # Update package record
+        self.db.update_package_status(package["id"], "installed")
+
+        # Record in history
+        self.db.add_install_history(
+            package_id=package["id"],
+            version=version,
+            action="install",
+            status="success",
+        )
+
+        return True
+
+    @staticmethod
+    def _compare_versions(version1: str, version2: str) -> int:
+        """
+        Compare two version strings.
+
+        Returns:
+            1 if version1 > version2
+            0 if version1 == version2
+            -1 if version1 < version2
+        """
+        try:
+            v1 = version.parse(version1)
+            v2 = version.parse(version2)
+
+            if v1 > v2:
+                return 1
+            elif v1 < v2:
+                return -1
+            else:
+                return 0
+        except version.InvalidVersion:
+            # Fall back to simple string comparison if parsing fails
+            if version1 > version2:
+                return 1
+            elif version1 < version2:
+                return -1
+            else:
+                return 0
 
 
 class MDMPackageBuilder:

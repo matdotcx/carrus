@@ -32,6 +32,14 @@ jobs:
     - name: Run tests
       run: |
         python -m pytest tests/ -v
+    
+    - name: Test version tracking
+      run: |
+        python -m pytest tests/test_database.py::TestVersionTracking tests/test_updater.py::TestVersionTracker -v
+        
+    - name: Check database schema
+      run: |
+        python -c "from carrus.core.database import Database; from pathlib import Path; db = Database(Path('./test.db')); print('Database schema created successfully')"
   build:
     needs: test
     runs-on: macos-latest

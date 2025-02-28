@@ -1,0 +1,121 @@
+name: Version Tracking Tests
+
+on:
+  push:
+    branches: [ "main", "gold" ]
+    paths:
+      - 'src/carrus/core/database.py'
+      - 'src/carrus/core/updater.py'
+      - 'tests/test_database.py'
+      - 'tests/test_updater.py'
+  pull_request:
+    branches: [ "main", "gold" ]
+    paths:
+      - 'src/carrus/core/database.py'
+      - 'src/carrus/core/updater.py'
+      - 'tests/test_database.py'
+      - 'tests/test_updater.py'
+  workflow_dispatch:
+
+jobs:
+  test-version-tracking:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-asyncio
+        pip install -e .
+        
+    - name: Run version database tests
+      run: |
+        python -m pytest tests/test_database.py::TestVersionTracking -v
+        
+    - name: Run version tracker tests
+      run: |
+        python -m pytest tests/test_updater.py::TestVersionTracker -v
+        
+    - name: Test database schema
+      run: |
+        python -c "
+        from carrus.core.database import Database
+        from pathlib import Path
+        import json
+
+        # Create test database
+        db = Database(Path('./test.db'))
+        
+        # Add a test package
+        pkg_id = db.add_package('TestApp', '1.0.0')
+        
+        # Add versions
+        v1 = db.add_package_version(
+            package_id=pkg_id,
+            version='1.0.0',
+            url='https://example.com/testapp-1.0.0.dmg'
+        )
+        
+        v2 = db.add_package_version(
+            package_id=pkg_id,
+            version='1.1.0',
+            url='https://example.com/testapp-1.1.0.dmg'
+        )
+        
+        # Mark as installed
+        db.update_version_installed_status(v1, True)
+        
+        # Get versions and verify
+        versions = db.get_package_versions(pkg_id)
+        latest = db.get_latest_version(pkg_id)
+        installed = db.get_installed_version(pkg_id)
+        
+        # Print results
+        results = {
+            'total_versions': len(versions),
+            'latest_version': latest['version'] if latest else None,
+            'installed_version': installed['version'] if installed else None,
+        }
+        
+        print(f'Database version tracking test results: {json.dumps(results)}')
+        assert results['total_versions'] == 2
+        assert results['latest_version'] == '1.1.0'
+        assert results['installed_version'] == '1.0.0'
+        print('All tests passed!')
+        "
+    
+    - name: Generate version tracking report
+      run: |
+        echo "# Version Tracking Test Results" > version_report.md
+        echo "## Database Schema" >> version_report.md
+        echo "\`\`\`sql" >> version_report.md
+        echo "CREATE TABLE versions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          package_id INTEGER NOT NULL,
+          version TEXT NOT NULL,
+          url TEXT NOT NULL,
+          checksum TEXT,
+          release_date TIMESTAMP,
+          is_installed BOOLEAN DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(package_id) REFERENCES packages(id) ON DELETE CASCADE
+        );" >> version_report.md
+        echo "\`\`\`" >> version_report.md
+        echo "## Test Coverage" >> version_report.md
+        python -m pytest tests/test_database.py::TestVersionTracking tests/test_updater.py::TestVersionTracker -v --no-header --no-summary >> version_report.md
+        
+    - name: Upload version tracking report
+      uses: actions/upload-artifact@v4
+      with:
+        name: version-tracking-report
+        path: version_report.md
