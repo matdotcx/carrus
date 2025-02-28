@@ -43,23 +43,26 @@ jobs:
           CARRUS_SLACK_CHANNEL: "#software-updates"
           CARRUS_SLACK_USERNAME: "Carrus Update Bot"
         run: |
-          # Use Python to run programmatic check/notify instead of CLI command
-          python -c "
-import asyncio
-from carrus.core.config import get_default_config
-from carrus.core.notifications import NotificationService
-
-async def check_and_notify():
-    config = get_default_config()
-    service = NotificationService(config)
-    
-    # Make sure config is properly loaded
-    print(f'Notification method: {config.notifications.method}')
-    print(f'Slack webhook configured: {bool(config.notifications.slack_webhook_url)}')
-    
-    # Check for updates and send notifications
-    count = await service.notify_updates()
-    print(f'Sent {count} notifications')
-
-asyncio.run(check_and_notify())
-          "
+          # Create a temporary Python script
+          cat > checker.py << 'EOF'
+          import asyncio
+          from carrus.core.config import get_default_config
+          from carrus.core.notifications import NotificationService
+          
+          async def check_and_notify():
+              config = get_default_config()
+              service = NotificationService(config)
+              
+              # Make sure config is properly loaded
+              print(f'Notification method: {config.notifications.method}')
+              print(f'Slack webhook configured: {bool(config.notifications.slack_webhook_url)}')
+              
+              # Check for updates and send notifications
+              count = await service.notify_updates()
+              print(f'Sent {count} notifications')
+          
+          asyncio.run(check_and_notify())
+          EOF
+          
+          # Run the script
+          python checker.py

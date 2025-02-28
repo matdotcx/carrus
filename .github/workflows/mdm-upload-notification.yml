@@ -57,53 +57,57 @@ jobs:
           STATUS: ${{ github.event.inputs.status }}
           JOB_URL: ${{ github.event.inputs.job_url }}
         run: |
-          python -c "
-import asyncio
-import datetime
-from carrus.core.config import get_default_config
-from carrus.core.notifications import NotificationService, Notification
-import os
-
-async def send_mdm_notification():
-    # Get configuration with environment variables
-    config = get_default_config()
-    service = NotificationService(config)
-    
-    # Get input parameters
-    package_name = os.environ.get('PACKAGE_NAME')
-    package_version = os.environ.get('PACKAGE_VERSION')
-    mdm_platform = os.environ.get('MDM_PLATFORM')
-    status = os.environ.get('STATUS')
-    job_url = os.environ.get('JOB_URL', '')
-    
-    # Create appropriate title and message based on status
-    if status.lower() == 'success':
-        title = f'MDM Upload Successful'
-        message = f'Package {package_name} v{package_version} has been successfully uploaded to {mdm_platform}.'
-        if job_url:
-            message += f' [View details]({job_url})'
-    else:
-        title = f'MDM Upload Failed'
-        message = f'Failed to upload package {package_name} v{package_version} to {mdm_platform}.'
-        if job_url:
-            message += f' [View error details]({job_url})'
-    
-    # Create notification
-    notification = Notification(
-        title=title,
-        message=message,
-        package_name=package_name,
-        current_version='N/A',
-        new_version=package_version,
-        timestamp=datetime.datetime.now()
-    )
-    
-    # Send notification
-    success = await service.provider.notify(notification)
-    if success:
-        print(f'Successfully sent {status} notification for {package_name} v{package_version}')
-    else:
-        print(f'Failed to send notification')
-
-asyncio.run(send_mdm_notification())
-          "
+          # Create a temporary Python script
+          cat > mdm_notifier.py << 'EOF'
+          import asyncio
+          import datetime
+          from carrus.core.config import get_default_config
+          from carrus.core.notifications import NotificationService, Notification
+          import os
+          
+          async def send_mdm_notification():
+              # Get configuration with environment variables
+              config = get_default_config()
+              service = NotificationService(config)
+              
+              # Get input parameters
+              package_name = os.environ.get('PACKAGE_NAME')
+              package_version = os.environ.get('PACKAGE_VERSION')
+              mdm_platform = os.environ.get('MDM_PLATFORM')
+              status = os.environ.get('STATUS')
+              job_url = os.environ.get('JOB_URL', '')
+              
+              # Create appropriate title and message based on status
+              if status.lower() == 'success':
+                  title = f'MDM Upload Successful'
+                  message = f'Package {package_name} v{package_version} has been successfully uploaded to {mdm_platform}.'
+                  if job_url:
+                      message += f' [View details]({job_url})'
+              else:
+                  title = f'MDM Upload Failed'
+                  message = f'Failed to upload package {package_name} v{package_version} to {mdm_platform}.'
+                  if job_url:
+                      message += f' [View error details]({job_url})'
+              
+              # Create notification
+              notification = Notification(
+                  title=title,
+                  message=message,
+                  package_name=package_name,
+                  current_version='N/A',
+                  new_version=package_version,
+                  timestamp=datetime.datetime.now()
+              )
+              
+              # Send notification
+              success = await service.provider.notify(notification)
+              if success:
+                  print(f'Successfully sent {status} notification for {package_name} v{package_version}')
+              else:
+                  print(f'Failed to send notification')
+          
+          asyncio.run(send_mdm_notification())
+          EOF
+          
+          # Run the script
+          python mdm_notifier.py
