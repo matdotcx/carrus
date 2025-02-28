@@ -14,8 +14,11 @@ class NotificationConfig:
     enabled: bool = True
     check_interval: int = 24  # Hours
     notify_on_startup: bool = True
-    method: str = "cli"  # cli, system, email
+    method: str = "cli"  # cli, system, email, github
     email: Optional[str] = None
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
+    github_issue_label: str = "update-available"
     last_check: Optional[str] = None
 
 
@@ -76,6 +79,9 @@ def save_config(config: Config, config_path: Path) -> None:
         "notify_on_startup": config.notifications.notify_on_startup,
         "method": config.notifications.method,
         "email": config.notifications.email,
+        "github_token": config.notifications.github_token,
+        "github_repo": config.notifications.github_repo,
+        "github_issue_label": config.notifications.github_issue_label,
         "last_check": config.notifications.last_check,
     }
 

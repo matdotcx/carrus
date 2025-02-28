@@ -30,10 +30,19 @@ NOTIFICATION_ENABLED = typer.Option(
     True, "--enabled/--disabled", help="Enable or disable notifications"
 )
 NOTIFICATION_METHOD = typer.Option(
-    "cli", "--method", "-m", help="Notification method: cli, system, or email"
+    "cli", "--method", "-m", help="Notification method: cli, system, email, or github"
 )
 NOTIFICATION_EMAIL = typer.Option(None, "--email", "-e", help="Email address for notifications")
 NOTIFICATION_INTERVAL = typer.Option(24, "--interval", "-i", help="Check interval in hours")
+NOTIFICATION_GITHUB_TOKEN = typer.Option(
+    None, "--github-token", help="GitHub token for authentication"
+)
+NOTIFICATION_GITHUB_REPO = typer.Option(
+    None, "--github-repo", help="GitHub repository for notifications (owner/repo)"
+)
+NOTIFICATION_GITHUB_LABEL = typer.Option(
+    "update-available", "--github-label", help="GitHub issue label"
+)
 
 app = typer.Typer(name="carrus", help="Modern macOS package manager")
 console = Console()
@@ -510,6 +519,9 @@ def configure_notifications(
     method: Annotated[str, NOTIFICATION_METHOD],
     email: Annotated[Optional[str], NOTIFICATION_EMAIL] = None,
     interval: Annotated[int, NOTIFICATION_INTERVAL] = 24,
+    github_token: Annotated[Optional[str], NOTIFICATION_GITHUB_TOKEN] = None,
+    github_repo: Annotated[Optional[str], NOTIFICATION_GITHUB_REPO] = None,
+    github_label: Annotated[Optional[str], NOTIFICATION_GITHUB_LABEL] = "update-available",
 ):
     """Configure notification settings."""
     try:
@@ -531,9 +543,9 @@ def configure_notifications(
             config = get_default_config()
 
         # Validate method
-        if method not in ["cli", "system", "email"]:
+        if method not in ["cli", "system", "email", "github"]:
             console.print(
-                "[red]Error: Invalid notification method. Must be cli, system, or email.[/red]"
+                "[red]Error: Invalid notification method. Must be cli, system, email, or github.[/red]"
             )
             raise typer.Exit(1)
 
@@ -541,6 +553,17 @@ def configure_notifications(
         if method == "email" and not email:
             console.print("[red]Error: Email address required for email notifications.[/red]")
             raise typer.Exit(1)
+
+        # Validate GitHub settings if using GitHub notifications
+        if method == "github":
+            if not github_token:
+                console.print("[red]Error: GitHub token required for GitHub notifications.[/red]")
+                raise typer.Exit(1)
+            if not github_repo:
+                console.print(
+                    "[red]Error: GitHub repository required for GitHub notifications.[/red]"
+                )
+                raise typer.Exit(1)
 
         # Update notification config
         config.notifications = NotificationConfig(
@@ -550,6 +573,9 @@ def configure_notifications(
             check_interval=interval,
             notify_on_startup=config.notifications.notify_on_startup,
             last_check=config.notifications.last_check,
+            github_token=github_token,
+            github_repo=github_repo,
+            github_issue_label=github_label,
         )
 
         # Save config
@@ -560,6 +586,10 @@ def configure_notifications(
         console.print(f"Method: {method}")
         if method == "email":
             console.print(f"Email: {email}")
+        elif method == "github":
+            console.print(f"GitHub Repository: {github_repo}")
+            console.print(f"GitHub Issue Label: {github_label}")
+            console.print(f"GitHub Token: {'Configured' if github_token else 'Not configured'}")
         console.print(f"Check interval: {interval} hours")
 
     except Exception as e:
@@ -592,6 +622,12 @@ def notification_status():
         console.print(f"Method: {notifications.method}")
         if notifications.method == "email":
             console.print(f"Email: {notifications.email or 'Not configured'}")
+        elif notifications.method == "github":
+            console.print(f"GitHub Repository: {notifications.github_repo or 'Not configured'}")
+            console.print(f"GitHub Issue Label: {notifications.github_issue_label}")
+            console.print(
+                f"GitHub Token: {'Configured' if notifications.github_token else 'Not configured'}"
+            )
         console.print(f"Check interval: {notifications.check_interval} hours")
 
         if notifications.last_check:

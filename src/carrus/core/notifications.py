@@ -3,12 +3,15 @@
 import asyncio
 import datetime
 import logging
+import re
+import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from email.message import EmailMessage
 from pathlib import Path
 from typing import List, Optional
 
+import aiohttp
 from rich.console import Console
 
 from carrus.core.config import Config
@@ -136,6 +139,166 @@ class EmailNotificationProvider(NotificationProvider):
             return False
 
 
+class GitHubNotificationProvider(NotificationProvider):
+    """GitHub notification provider using GitHub issues."""
+
+    def __init__(self, token: str, repo: str, label: str = "update-available"):
+        self.token = token
+        self.repo = repo
+        self.label = label
+
+        # Extract owner and repo name
+        match = re.match(r"(?:https?://github\.com/)?([^/]+)/([^/]+)", repo)
+        if match:
+            self.owner, self.repo_name = match.groups()
+        else:
+            # Try to extract from git remote
+            try:
+                # Use full path to git command for security
+                git_path = "/usr/bin/git"
+                result = subprocess.run(
+                    [git_path, "remote", "get-url", "origin"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                url = result.stdout.strip()
+                match = re.search(r"[:/]([^/]+)/([^/]+?)(?:\.git)?$", url)
+                if match:
+                    self.owner, self.repo_name = match.groups()
+                else:
+                    raise ValueError(f"Could not parse GitHub repo from: {repo}")
+            except subprocess.SubprocessError as err:
+                raise ValueError(f"Could not parse GitHub repo from: {repo}") from err
+
+    async def notify(self, notification: Notification) -> bool:
+        """Create or update a GitHub issue for this notification."""
+        if not self.token:
+            logger.error("No GitHub token provided for GitHub notification")
+            return False
+
+        # Check if there's already an issue for this package
+        issue_number = await self._find_existing_issue(notification.package_name)
+
+        if issue_number:
+            # Update existing issue
+            return await self._update_issue(issue_number, notification)
+        else:
+            # Create new issue
+            return await self._create_issue(notification)
+
+    async def _find_existing_issue(self, package_name: str) -> Optional[int]:
+        """Find an existing issue for this package."""
+        try:
+            url = f"https://api.github.com/repos/{self.owner}/{self.repo_name}/issues"
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {self.token}",
+            }
+            params = {
+                "state": "open",
+                "labels": self.label,
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, params=params) as response:
+                    if response.status != 200:
+                        logger.error(f"Failed to get GitHub issues: {response.status}")
+                        return None
+
+                    issues = await response.json()
+
+                    # Look for issue with package name in title
+                    for issue in issues:
+                        if package_name in issue["title"]:
+                            return issue["number"]
+
+                    return None
+
+        except Exception as e:
+            logger.error(f"Failed to find GitHub issue: {e}")
+            return None
+
+    async def _create_issue(self, notification: Notification) -> bool:
+        """Create a new GitHub issue for this notification."""
+        try:
+            url = f"https://api.github.com/repos/{self.owner}/{self.repo_name}/issues"
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {self.token}",
+            }
+
+            title = f"Update Available: {notification.package_name} {notification.new_version}"
+            body = f"""
+## Update Available
+
+**Package:** {notification.package_name}
+**Current Version:** {notification.current_version}
+**New Version:** {notification.new_version}
+
+{notification.message}
+
+*This issue was automatically created by Carrus update notification system at {notification.timestamp.isoformat()}*
+"""
+
+            data = {
+                "title": title,
+                "body": body,
+                "labels": [self.label],
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data) as response:
+                    if response.status not in (201, 200):
+                        logger.error(f"Failed to create GitHub issue: {response.status}")
+                        return False
+
+                    logger.info(f"Created GitHub issue for {notification.package_name}")
+                    return True
+
+        except Exception as e:
+            logger.error(f"Failed to create GitHub issue: {e}")
+            return False
+
+    async def _update_issue(self, issue_number: int, notification: Notification) -> bool:
+        """Update an existing GitHub issue for this notification."""
+        try:
+            url = f"https://api.github.com/repos/{self.owner}/{self.repo_name}/issues/{issue_number}/comments"
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": f"token {self.token}",
+            }
+
+            comment = f"""
+## Update Available
+
+**Package:** {notification.package_name}
+**Current Version:** {notification.current_version}
+**New Version:** {notification.new_version}
+
+{notification.message}
+
+*This comment was automatically added by Carrus update notification system at {notification.timestamp.isoformat()}*
+"""
+
+            data = {
+                "body": comment,
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data) as response:
+                    if response.status not in (201, 200):
+                        logger.error(f"Failed to update GitHub issue: {response.status}")
+                        return False
+
+                    logger.info(f"Updated GitHub issue for {notification.package_name}")
+                    return True
+
+        except Exception as e:
+            logger.error(f"Failed to update GitHub issue: {e}")
+            return False
+
+
 class NotificationService:
     """Service for managing notifications."""
 
@@ -151,6 +314,16 @@ class NotificationService:
             self.provider = SystemNotificationProvider()
         elif self.notification_config.method == "email" and self.notification_config.email:
             self.provider = EmailNotificationProvider(self.notification_config.email)
+        elif (
+            self.notification_config.method == "github"
+            and self.notification_config.github_token
+            and self.notification_config.github_repo
+        ):
+            self.provider = GitHubNotificationProvider(
+                token=self.notification_config.github_token,
+                repo=self.notification_config.github_repo,
+                label=self.notification_config.github_issue_label,
+            )
         else:
             self.provider = CLINotificationProvider()
 
@@ -215,9 +388,16 @@ class NotificationService:
         except (ValueError, TypeError):
             return True
 
-    def set_notification_method(self, method: str, email: Optional[str] = None) -> None:
+    def set_notification_method(
+        self,
+        method: str,
+        email: Optional[str] = None,
+        github_token: Optional[str] = None,
+        github_repo: Optional[str] = None,
+        github_label: Optional[str] = None,
+    ) -> None:
         """Set the notification method."""
-        if method not in ["cli", "system", "email"]:
+        if method not in ["cli", "system", "email", "github"]:
             raise ValueError(f"Invalid notification method: {method}")
 
         self.notification_config.method = method
@@ -227,6 +407,22 @@ class NotificationService:
                 raise ValueError("Email address required for email notifications")
             self.notification_config.email = email
             self.provider = EmailNotificationProvider(email)
+        elif method == "github":
+            if not github_token:
+                raise ValueError("GitHub token required for GitHub notifications")
+            if not github_repo:
+                raise ValueError("GitHub repository required for GitHub notifications")
+
+            self.notification_config.github_token = github_token
+            self.notification_config.github_repo = github_repo
+            if github_label:
+                self.notification_config.github_issue_label = github_label
+
+            self.provider = GitHubNotificationProvider(
+                token=github_token,
+                repo=github_repo,
+                label=github_label or self.notification_config.github_issue_label,
+            )
         elif method == "system":
             self.provider = SystemNotificationProvider()
         else:
