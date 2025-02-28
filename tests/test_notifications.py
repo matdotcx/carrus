@@ -125,7 +125,7 @@ class TestNotificationProviders:
         mock_session.__aenter__.return_value = mock_session
         mock_session.post = AsyncMock(return_value=mock_response)
         
-        with patch("aiohttp.ClientSession", return_value=mock_session) as mock_client:
+        with patch("aiohttp.ClientSession", return_value=mock_session):
             result = await provider.notify(notification)
             
             assert result is True
@@ -146,7 +146,7 @@ class TestNotificationProviders:
         mock_session.__aenter__.return_value = mock_session
         mock_session.post = AsyncMock(return_value=mock_response)
         
-        with patch("aiohttp.ClientSession", return_value=mock_session) as mock_client:
+        with patch("aiohttp.ClientSession", return_value=mock_session):
             with patch("logging.Logger.error") as mock_log:
                 result = await provider.notify(notification)
                 
