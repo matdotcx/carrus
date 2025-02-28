@@ -32,8 +32,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/carrus"]
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
+# [tool.pytest.ini_options]
+# We now use trio.run() directly instead of pytest-asyncio
 
 [tool.ruff]
 line-length = 100

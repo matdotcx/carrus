@@ -65,19 +65,18 @@ class TestNotificationProviders:
         provider = CLINotificationProvider()
         assert provider.console is not None
 
-    @pytest.mark.anyio
-    async def test_cli_provider_notify(self, notification):
+    def test_cli_provider_notify(self, notification):
         """Test CLI provider notify method."""
         mock_console = MagicMock()
         provider = CLINotificationProvider(console=mock_console)
 
-        result = await provider.notify(notification)
+        # Run the async function with trio
+        result = trio.run(provider.notify, notification)
 
         assert result is True
         mock_console.print.assert_called()
 
-    @pytest.mark.anyio
-    async def test_system_provider_notify(self, notification):
+    def test_system_provider_notify(self, notification):
         """Test system provider notify method with mocked subprocess."""
         provider = SystemNotificationProvider()
 
@@ -86,33 +85,47 @@ class TestNotificationProviders:
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(b"", b""))
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
-            result = await provider.notify(notification)
+        # Use a context manager to patch during execution
+        async def run_test():
+            with patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+                result = await provider.notify(notification)
+                return result, mock_exec
+        
+        # Run the async function with trio
+        result, mock_exec = trio.run(run_test)
+        
+        assert result is True
+        mock_exec.assert_called_once()
 
-            assert result is True
-            mock_exec.assert_called_once()
-
-    @pytest.mark.anyio
-    async def test_email_provider_notify(self, notification):
+    def test_email_provider_notify(self, notification):
         """Test email provider notify method."""
         provider = EmailNotificationProvider("test@example.com")
 
-        with patch("logging.Logger.info") as mock_log:
-            result = await provider.notify(notification)
+        async def run_test():
+            with patch("logging.Logger.info") as mock_log:
+                result = await provider.notify(notification)
+                return result, mock_log
+                
+        # Run the async function with trio
+        result, mock_log = trio.run(run_test)
 
-            assert result is True
-            mock_log.assert_called_once()
+        assert result is True
+        mock_log.assert_called_once()
 
-    @pytest.mark.anyio
-    async def test_email_provider_no_recipient(self, notification):
+    def test_email_provider_no_recipient(self, notification):
         """Test email provider with no recipient."""
         provider = EmailNotificationProvider("")
 
-        with patch("logging.Logger.error") as mock_log:
-            result = await provider.notify(notification)
+        async def run_test():
+            with patch("logging.Logger.error") as mock_log:
+                result = await provider.notify(notification)
+                return result, mock_log
+            
+        # Run the async function with trio
+        result, mock_log = trio.run(run_test)
 
-            assert result is False
-            mock_log.assert_called_once()
+        assert result is False
+        mock_log.assert_called_once()
 
     # Run async code with trio
     def test_slack_provider_notify(self, notification):
@@ -128,8 +141,12 @@ class TestNotificationProviders:
         # Create an instance with our test implementation
         provider = TestSlackProvider("https://hooks.slack.com/services/XXX/YYY/ZZZ")
 
+        # Define an async function to run
+        async def run_test():
+            return await provider.notify(notification)
+
         # Test the notification using trio to run the async function
-        result = trio.run(provider.notify, notification)
+        result = trio.run(run_test)
 
         # Verify the result
         assert result is True
@@ -148,25 +165,33 @@ class TestNotificationProviders:
         # Create an instance with our test implementation
         provider = TestSlackProviderError("https://hooks.slack.com/services/XXX/YYY/ZZZ")
 
-        # Test the notification with error
-        with patch("logging.Logger.error") as mock_log:
-            # Run the async function with trio
-            result = trio.run(provider.notify, notification)
+        # Define an async function that includes the patch
+        async def run_test():
+            with patch("logging.Logger.error") as mock_log:
+                result = await provider.notify(notification)
+                return result, mock_log
 
-            # Verify the result
-            assert result is False
-            mock_log.assert_called_once()
+        # Run the async function with trio
+        result, mock_log = trio.run(run_test)
 
-    @pytest.mark.anyio
-    async def test_slack_provider_no_webhook(self, notification):
+        # Verify the result
+        assert result is False
+        mock_log.assert_called_once()
+
+    def test_slack_provider_no_webhook(self, notification):
         """Test Slack provider with no webhook URL."""
         provider = SlackNotificationProvider("")
 
-        with patch("logging.Logger.error") as mock_log:
-            result = await provider.notify(notification)
+        async def run_test():
+            with patch("logging.Logger.error") as mock_log:
+                result = await provider.notify(notification)
+                return result, mock_log
+            
+        # Run the async function with trio
+        result, mock_log = trio.run(run_test)
 
-            assert result is False
-            mock_log.assert_called_once()
+        assert result is False
+        mock_log.assert_called_once()
 
 
 class TestNotificationService:
@@ -233,8 +258,7 @@ class TestNotificationService:
             service.notification_config.enabled = False
             assert service.should_check_updates() is False
 
-    @pytest.mark.anyio
-    async def test_check_updates(self, test_config, mock_db):
+    def test_check_updates(self, test_config, mock_db):
         """Test check_updates method."""
         # Mock version tracker
         mock_tracker = MagicMock()
@@ -248,22 +272,25 @@ class TestNotificationService:
         # Mock database
         mock_db.get_installed_version.return_value = {"version": "1.0.0"}
 
-        with patch("carrus.core.notifications.Database", return_value=mock_db):
-            with patch("carrus.core.notifications.VersionTracker", return_value=mock_tracker):
-                service = NotificationService(test_config)
+        async def run_test():
+            with patch("carrus.core.notifications.Database", return_value=mock_db):
+                with patch("carrus.core.notifications.VersionTracker", return_value=mock_tracker):
+                    service = NotificationService(test_config)
+                    notifications = await service.check_updates()
+                    return notifications, service.notification_config
+        
+        # Run the async function with trio
+        notifications, notification_config = trio.run(run_test)
 
-                notifications = await service.check_updates()
+        assert len(notifications) == 1
+        assert notifications[0].package_name == "TestApp"
+        assert notifications[0].current_version == "1.0.0"
+        assert notifications[0].new_version == "1.1.0"
 
-                assert len(notifications) == 1
-                assert notifications[0].package_name == "TestApp"
-                assert notifications[0].current_version == "1.0.0"
-                assert notifications[0].new_version == "1.1.0"
+        # Check last_check was updated
+        assert notification_config.last_check is not None
 
-                # Check last_check was updated
-                assert service.notification_config.last_check is not None
-
-    @pytest.mark.anyio
-    async def test_notify_updates(self, test_config, mock_db, notification):
+    def test_notify_updates(self, test_config, mock_db, notification):
         """Test notify_updates method."""
         # Mock check_updates
         mock_check = AsyncMock(return_value=[notification])
@@ -272,28 +299,34 @@ class TestNotificationService:
         mock_provider = AsyncMock()
         mock_provider.notify = AsyncMock(return_value=True)
 
-        with patch("carrus.core.notifications.Database", return_value=mock_db):
-            service = NotificationService(test_config)
-            service.check_updates = mock_check
-            service.provider = mock_provider
+        async def run_test():
+            with patch("carrus.core.notifications.Database", return_value=mock_db):
+                service = NotificationService(test_config)
+                service.check_updates = mock_check
+                service.provider = mock_provider
+                count = await service.notify_updates()
+                return count, mock_check, mock_provider
+        
+        # Run the async function with trio
+        count, mock_check, mock_provider = trio.run(run_test)
 
-            count = await service.notify_updates()
+        assert count == 1
+        mock_check.assert_called_once()
+        mock_provider.notify.assert_called_once_with(notification)
 
-            assert count == 1
-            mock_check.assert_called_once()
-            mock_provider.notify.assert_called_once_with(notification)
-
-    @pytest.mark.anyio
-    async def test_notify_updates_disabled(self, test_config, mock_db):
+    def test_notify_updates_disabled(self, test_config, mock_db):
         """Test notify_updates method when disabled."""
         test_config.notifications.enabled = False
 
-        with patch("carrus.core.notifications.Database", return_value=mock_db):
-            service = NotificationService(test_config)
+        async def run_test():
+            with patch("carrus.core.notifications.Database", return_value=mock_db):
+                service = NotificationService(test_config)
+                return await service.notify_updates()
+        
+        # Run the async function with trio
+        count = trio.run(run_test)
 
-            count = await service.notify_updates()
-
-            assert count == 0
+        assert count == 0
 
     def test_set_notification_method(self, test_config, mock_db):
         """Test set_notification_method method."""
